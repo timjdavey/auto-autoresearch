@@ -27,6 +27,10 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 def run_study(num_trials=100, persistent=False):
     """Run a study and return the log directory path."""
+    # Run prepare.py first to validate setup and record a baseline evaluation
+    print("=== Running prepare.py (validate & baseline) ===", file=sys.stderr)
+    subprocess.run([sys.executable, "prepare.py"], check=True)
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = Path("logs") / timestamp
     log_dir.mkdir(parents=True, exist_ok=True)
