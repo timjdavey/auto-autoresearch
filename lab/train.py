@@ -5,7 +5,7 @@ Contains a single function `solve(coords)` that takes a list of (x, y)
 coordinates and returns a tour as a list of city indices.
 
 Current implementation: nearest-neighbour heuristic (baseline).
-The agent should improve this to minimise avg_gap across all instances.
+The agent should improve this to maximise avg_improvement across all instances.
 """
 
 import math

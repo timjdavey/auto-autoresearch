@@ -17,6 +17,7 @@ queue/
 .claude
 CLAUDE.md
 AGENTS.md
+.ideas.md
 
 # Experimental code/artifacts
 dev/

@@ -35,12 +35,14 @@ A crash or timeout on any training instance incurs an improvement penalty of -10
 
 ## Constraints
 
-- **Time budget**: Each instance has a 30-second wall-clock limit. Your `solve()` function is called 25 times per evaluation (once per instance). Design algorithms that use the time budget wisely — a smarter 25-second algorithm beats a naive 0.1-second one.
-- **Single file**: All your code must live in `train.py`. You may import from the standard library and `math`. Do not add external dependencies (no numpy, scipy, networkx, etc.) — keep it self-contained.
+- **Time limit**: Each `solve()` call has a 30-second wall-clock cap (enforced by the harness). You won't usually hit it, but be aware it exists if you try very expensive approaches.
+- **Single file**: All your code must live in `train.py`. You may import from the Python standard library (e.g. `math`, `time`, `random`, `itertools`). Do not add external dependencies (no numpy, scipy, networkx, etc.) — keep it self-contained.
 - **No hardcoding**: Do not hardcode tours or solutions for specific instances. Your `solve()` function must work as a general algorithm that takes arbitrary coordinates.
 - **No reading prepare.py at runtime for coordinate matching**: Do not detect which instance is being solved to apply instance-specific logic.
 
 ## Setup
+
+Run all commands from the project root directory (where `prepare.py` lives), not from `lab/`.
 
 Before your first trial:
 
