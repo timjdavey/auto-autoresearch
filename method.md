@@ -43,3 +43,28 @@ After a study completes, run:
 python evaluate.py
 ```
 This reads `lab/evaluations.csv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
+
+### Post-study review
+
+After evaluating a study, perform these two reviews before starting the next study or campaign.
+
+#### 1. Quality audit
+
+Review `lab/RESULTS.md` and `lab/evaluations.csv` for errors or signs the Scientist misunderstood its instructions:
+
+- Trials that ran out of sequence or duplicated (e.g. more trial entries than `--trials` requested)
+- Incomplete entries (hypothesis written but no result recorded)
+- Reported metrics that don't match what `evaluations.csv` actually shows
+- Any other signs the Scientist deviated from `lab/program.md`
+
+If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `lab/program.md` to prevent the issue from recurring.
+
+#### 2. Tooling & technique review
+
+Review `lab/train.py` and the evaluation results to assess whether the Scientist is making effective use of the tools and time budget available to it:
+
+- Is it using the available packages (`numpy`, `scipy`, `numba`)? These can dramatically speed up inner loops and unlock more computation within the time budget.
+- Is it using the 30-second per-instance time budget effectively, or finishing in milliseconds?
+- Are there obvious algorithmic approaches it hasn't tried that the results suggest would help?
+
+If the Scientist is underutilising available tools or techniques, update `lab/program.md` to better guide it — e.g. add stronger encouragement to use specific packages, suggest concrete techniques, or reorder the research strategy guidance to prioritise underexplored approaches.

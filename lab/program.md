@@ -52,7 +52,7 @@ Before your first trial:
 
 ## Trial loop
 
-Each trial follows three steps. Repeat indefinitely:
+Each trial follows three steps. **Run exactly one trial per invocation** — after completing all three steps for a single trial, stop. The study harness will invoke you again for subsequent trials.
 
 ### Step 1: Plan
 
@@ -89,8 +89,6 @@ Review the results and append your reflection to the trial entry in `lab/RESULTS
 ```
 
 If the trial failed or made things worse, **still reflect** — failed trials are valuable data. Then revert `train.py` (`git checkout -- lab/train.py`) before planning the next trial.
-
-### Then repeat from Step 1.
 
 ## Research strategy guidance
 
