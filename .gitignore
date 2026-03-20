@@ -24,3 +24,6 @@ dev/
 
 # Results file
 results.tsv
+
+# Study logs
+logs/

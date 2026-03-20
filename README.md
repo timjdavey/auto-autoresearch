@@ -1,6 +1,12 @@
 # auto-autoresearch
 Autoresearching autoresearch. Let's optimise how an LLM does autoresearch! It's autoresearch all the way down.
 
+## How it works
+
+There are two layers.
+* inner loop: a **Scientist** agent edits `train.py` like the standard autoresearch cycle. Runs trials.
+* outer loop: a **Supervisor** meta-researcher optimises `program.md` and related tools in the `lab/` folder to improve how the Scientist runs its studies.
+
 
 ## Taxonomy
 
@@ -10,15 +16,10 @@ Autoresearching autoresearch. Let's optimise how an LLM does autoresearch! It's 
 | **Scientist** | The inner agent. Modifies `train.py` to improve the TSP solver |
 | **Trial** | One plan-run-reflect cycle: a single hypothesis, implementation, evaluation and reflection |
 | **Study** | A full series of trials in one invocation of the Scientist |
+| **Campaign** | A series of iteratively improving studies, executed by the Supervisor |
 
 
-## How it works
-
-There are two research layers.
-* **Scientist**: edits `train.py` like a standard autoresearch cycle. Runs trials.
-* **Supervisor**: meta-researcher which optimises `program.md` and related tools in the `lab/` folder to improve how the Scientist runs its studies.
-
-Key files:
+## Project structure
 
 * `lab/train.py` contains a `solve` function which the **Scientist** edits.
 * `lab/record.py` tools to record how the hypotheses, learnings and results are stored. This is edited by the **Supervisor**.
@@ -26,7 +27,7 @@ Key files:
 * `lab` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
 * `prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**. Placed outside of lab to avoid confusion.
 * `method.md` instructions for the **Supervisor** to follow. **Not modified by Supervisor or Scientist.**
-* `study.sh` runs a study. Supports `--trials N` (default 100) and `--persistent` flag. **Not modified by Supervisor or Scientist.**
+* `study.py` runs a study. Supports `--trials N` (default 100) and `--persistent` flag. **Not modified by Supervisor or Scientist.**
 
 
 ## Design choices
@@ -34,7 +35,7 @@ Key files:
 * **Optimisation over nanochat.** Our goal here isn't to improve deep-learning, it's to improve learning-learning. So we've swapped out `train.py` to an inner experiment which is cheaper and faster to evaluate. This is so each study can be kept within a similar small time budget.
 * **Dependencies.** Have been kept to a minimum initially to keep things sane. But the more tools (incl coding languages) it has available the better it can optimise ((as we've seen with hardware)[https://blog.skypilot.co/scaling-autoresearch/]).
 * **Evaluation.** In the future we'll want to give the Supervisor control over `prepare.py`, to tinker with the loss_functions etc, but for now that's too easy to game. So we've locked this off until guardrails can be put in place. For the same reason, `prepare.py` contains the evaluation calls rather than `train.py`.
-* **Invocation.** `study.sh` is locked to prevent the Supervisor from dangerously-skipping-permissions.
+* **Invocation.** `study.py` is locked to prevent the Supervisor from dangerously-skipping-permissions.
 * **Inner improvement only.** In theory we should allow the Supervisor to incorporate the best studies into it's own learning process directly. But we want to avoid local optimas, so we'll only merge the best systems in periodically (for now).
 
 
