@@ -27,7 +27,20 @@ There are two layers.
 * `lab` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
 * `prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**. Placed outside of lab to avoid confusion.
 * `method.md` instructions for the **Supervisor** to follow. **Not modified by Supervisor or Scientist.**
-* `study.py` runs a study. Supports `--trials N` (default 100) and `--persistent` flag. **Not modified by Supervisor or Scientist.**
+* `study.py` runs a study. Supports `--trials N` (default 100) and `--timeout S` (default 600s per trial). **Not modified by Supervisor or Scientist.**
+
+
+## Quick test
+
+To verify everything is working, run a short study (1 trial, sonnet by default):
+```
+python study.py --trials 1
+```
+
+To test with opus:
+```
+python study.py --trials 1 --opus
+```
 
 
 ## Design choices

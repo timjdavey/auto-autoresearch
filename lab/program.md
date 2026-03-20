@@ -6,8 +6,8 @@ You are the Scientist — an autonomous research agent. Your goal is to iterativ
 
 - **`prepare.py`** — Evaluation harness. Contains 25 TSP instances (5 known TSPLIB benchmarks, 20 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
 - **`lab/train.py`** — Your solver. Contains a single function `solve(coords)` that receives a list of `(x, y)` coordinate tuples and must return a tour as a list of city indices (a permutation of `0..n-1`). **This is the only file you modify.**
-- **`lab/record.py`** — Trial tracking CLI and library. Records trials to `lab/results.json`. **Do not modify.**
-- **`lab/results.json`** — Auto-generated trial log. Created on first use. **Do not modify directly.**
+- **`lab/record.py`** — Prints evaluation results to stdout. Called by `prepare.py`. **Do not modify.**
+- **`lab/RESULTS.md`** — Your trial log. You maintain this file directly.
 - **`lab/program.md`** — This file. Read-only.
 
 ## The metric
@@ -47,7 +47,7 @@ Run all commands from the project root directory (where `prepare.py` lives), not
 Before your first trial:
 
 1. **Read the files**: Read `prepare.py` and `train.py` in full for context. Understand the evaluation function, the instances, and the current solver.
-2. **Review past trials**: If `lab/results.json` exists, read it to understand what has already been tried, what worked, and what didn't. Build on prior learnings rather than repeating failed approaches.
+2. **Review past trials**: If `lab/RESULTS.md` exists, read it to understand what has already been tried, what worked, and what didn't. Build on prior learnings rather than repeating failed approaches.
 3. **Run the baseline**: Execute a plan+run+reflect cycle (see below) with your initial hypothesis being "baseline measurement".
 
 ## Trial loop
@@ -56,14 +56,13 @@ Each trial follows three steps. Repeat indefinitely:
 
 ### Step 1: Plan
 
-Formulate a hypothesis and motivation, then register the trial:
+Formulate a hypothesis and motivation. Append them to `lab/RESULTS.md`:
 
-```bash
-python -m lab.record plan --hypothesis "try 2-opt local search" --motivation "should beat NN by swapping crossing edges"
+```markdown
+## Trial {n}
+**Hypothesis:** try 2-opt local search
+**Motivation:** should beat NN by swapping crossing edges
 ```
-
-- **hypothesis**: What specific technique or change you will try.
-- **motivation**: Why you think it will improve results. This can be rational ("2-opt is proven to reduce tour length") or exploratory ("curious whether random restarts help on larger instances").
 
 ### Step 2: Run
 
@@ -77,24 +76,17 @@ python3 prepare.py
 
 If the run crashed, the traceback will be visible in the tool result. Attempt a fix. If you cannot fix it after 2-3 attempts, revert `train.py` and move on.
 
-The evaluation automatically records training and benchmark results into `lab/results.json` against the current trial.
+The evaluation prints training and benchmark results to stdout. Copy the key metrics (avg_improvement, avg_loss) into your trial entry in `lab/RESULTS.md`.
 
 ### Step 3: Reflect
 
-Review the results and record your retrospective:
+Review the results and append your reflection to the trial entry in `lab/RESULTS.md`:
 
-```bash
-python -m lab.record reflect \
-  --analysis "2-opt improved small instances (rand20-50) by 8% but rand200 only 2%. Total time well within budget." \
-  --learnings "2-opt is effective for small instances but diminishing returns on larger ones. Edge density matters." \
-  --future "try or-opt or 3-opt for larger instances; consider time-aware iteration" \
-  --abstract "Implemented 2-opt local search. Modest improvement on small instances, limited gains on rand200. Need more sophisticated moves for larger problems."
+```markdown
+**Analysis:** 2-opt improved small instances by 8% but rand200 only 2%.
+**Learnings:** Effective for small instances but diminishing returns on larger ones.
+**Future:** try or-opt or 3-opt for larger instances
 ```
-
-- **analysis**: Breakdown of the results — what improved, what didn't, by how much.
-- **learnings**: What you learned from this trial relative to your hypothesis and motivation.
-- **future**: Ideas for next trials, informed by what you just learned.
-- **abstract**: A concise summary of the entire trial (1-3 sentences).
 
 If the trial failed or made things worse, **still reflect** — failed trials are valuable data. Then revert `train.py` (`git checkout -- lab/train.py`) before planning the next trial.
 
@@ -142,4 +134,4 @@ The baseline is a nearest-neighbour heuristic (`avg_improvement = 0%`). Here is 
 - **Use the time budget**: The biggest mistake is leaving 29 seconds on the table. If your solver finishes in 0.01s, you have room for vastly more computation.
 - **Record everything**: Even failed trials inform your next hypothesis. Always complete all three steps.
 - **Don't fight crashes**: If an idea keeps crashing, revert and try something else. There are many paths to a better solver.
-- **Build on history**: Read `results.json` before planning. Don't repeat failed approaches. Let past learnings guide your next hypothesis.
+- **Build on history**: Read `RESULTS.md` before planning. Don't repeat failed approaches. Let past learnings guide your next hypothesis.

@@ -7,10 +7,10 @@
 # Runs a study: one or more Scientist invocations.
 #
 # Usage:
-#   python study.py                       # 100 fresh-context trials
+#   python study.py                       # 100 trials, sonnet (default)
 #   python study.py --trials 5            # 5 fresh-context trials
-#   python study.py --persistent          # single persistent-context invocation
-#   python study.py --persistent --trials 10  # persistent, hint "aim for ~10 trials"
+#   python study.py --timeout 300         # 5-minute per-trial timeout
+#   python study.py --opus                # run with opus (for testing)
 
 import argparse
 import signal
@@ -19,13 +19,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+DEFAULT_MODEL = "sonnet"
+DEFAULT_TRIALS = 100
+DEFAULT_TIMEOUT = 600
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
+SCIENTIST_PROMPT = "Read and follow lab/program.md"
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 
-def run_study(num_trials=100, persistent=False):
+def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL):
     """Run a study and return the log directory path."""
     # Run prepare.py first to validate setup and record a baseline evaluation
     print("=== Running prepare.py (validate & baseline) ===", file=sys.stderr)
@@ -38,37 +42,38 @@ def run_study(num_trials=100, persistent=False):
     claude_cmd = [
         "claude", "-p",
         "--verbose",
+        "--model", model,
         "--output-format", "stream-json",
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
-    if persistent:
-        print(f"=== Persistent study (aim for ~{num_trials} trials) ===", file=sys.stderr)
-        log_file = log_dir / "study.jsonl"
-        prompt = f"Read and follow lab/program.md. Aim for around {num_trials} trials."
-        with open(log_file, "w") as f:
-            subprocess.run(claude_cmd, input=prompt, text=True, stdout=f, stderr=sys.stderr)
-    else:
-        for i in range(1, num_trials + 1):
-            print(f"=== Trial {i} / {num_trials} ===", file=sys.stderr)
-            log_file = log_dir / f"trial-{i:03d}.jsonl"
+    for i in range(1, num_trials + 1):
+        print(f"=== Trial {i} / {num_trials} ===", file=sys.stderr)
+        log_file = log_dir / f"trial-{i:03d}.jsonl"
+        try:
             with open(log_file, "w") as f:
                 subprocess.run(
                     claude_cmd,
-                    input="Read and follow lab/program.md",
+                    input=SCIENTIST_PROMPT,
                     text=True,
                     stdout=f,
                     stderr=sys.stderr,
+                    timeout=trial_timeout,
                 )
+        except subprocess.TimeoutExpired:
+            print(f"=== Trial {i} timed out after {trial_timeout}s, skipping ===", file=sys.stderr)
 
     return log_dir
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a study: one or more Scientist invocations.")
-    parser.add_argument("--trials", type=int, default=100, help="Number of trials (default: 100)")
-    parser.add_argument("--persistent", action="store_true", help="Single persistent-context invocation")
+    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help=f"Number of trials (default: {DEFAULT_TRIALS})")
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Per-trial timeout in seconds (default: {DEFAULT_TIMEOUT})")
+    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Claude model to use (default: {DEFAULT_MODEL})")
+    parser.add_argument("--opus", action="store_true", help="Shorthand for --model opus")
     args = parser.parse_args()
 
-    log_dir = run_study(num_trials=args.trials, persistent=args.persistent)
+    model = "opus" if args.opus else args.model
+    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model)
     print(f"Logs: {log_dir}", file=sys.stderr)

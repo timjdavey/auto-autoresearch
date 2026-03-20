@@ -8,15 +8,14 @@ A single script `study.py` invokes the Scientist with the following prompt `Read
 
 ### `study.py`
 ```
-python study.py                              # 100 fresh-context trials (default)
+python study.py                              # 100 trials, sonnet (default)
 python study.py --trials 5                   # 5 fresh-context trials
-python study.py --persistent                 # single persistent-context invocation
-python study.py --persistent --trials 10     # persistent, with ~10 trial hint
+python study.py --timeout 300                # 5-minute per-trial timeout
+python study.py --opus                       # run with opus (for testing)
+python study.py --model opus                 # equivalent to --opus
 ```
 
-**Fresh context (default):** Loops N times, each a fresh `claude -p` call. The Scientist starts from scratch every trial. Best when you want independent runs without context drift.
-
-**Persistent context (`--persistent`):** Single `claude -p` call. The Scientist keeps its context window across all trials in the study. The `--trials` value is passed as a hint in the prompt. Best when continuity and accumulated learning matter.
+Each trial is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `lab/RESULTS.md` to pick up where previous trials left off. If a trial exceeds `--timeout` seconds (default 600), it is killed and the study continues to the next trial.
 
 ### What you can change
 - `lab/program.md` — the Scientist's instructions
@@ -28,6 +27,10 @@ python study.py --persistent --trials 10     # persistent, with ~10 trial hint
 - `prepare.py`, `test_prepare.py` — evaluation framework (locked)
 - `evaluate.py` — post-study analysis (locked)
 - `lab/evaluations.csv` — stable evaluation log (locked, written by `prepare.py`)
+
+### Recording
+
+Currently the Scientist writes its progress directly to `lab/RESULTS.md` as free-form markdown. This is intentionally lightweight for early studies. As the campaign evolves, the Supervisor should update `lab/record.py` to provide reliable functions for more complex data structures — e.g. storing trial data in SQLite, using vector embeddings for similarity search over past trials, or any other tooling that helps the Scientist build on prior work more effectively.
 
 ### Dual recording
 
