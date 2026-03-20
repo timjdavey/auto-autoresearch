@@ -70,18 +70,12 @@ python -m lab.record plan --hypothesis "try 2-opt local search" --motivation "sh
 Edit `train.py` to implement your hypothesis, then evaluate:
 
 ```bash
-python prepare.py > run.log 2>&1
+python3 prepare.py
 ```
 
-Do NOT use `tee` or let output flood your context.
+**Warning: do NOT use shell output redirection (`>`, `2>&1`, `tee`, etc.) — you do not have permission to do so and it will error.** The output will appear inline in the tool result; read it directly from there.
 
-Read the results:
-
-```bash
-grep "avg_improvement:\|avg_loss:" run.log
-```
-
-If grep returns nothing, the run crashed. Run `tail -n 30 run.log` to see the traceback and attempt a fix. If you cannot fix it after 2-3 attempts, revert `train.py` and move on.
+If the run crashed, the traceback will be visible in the tool result. Attempt a fix. If you cannot fix it after 2-3 attempts, revert `train.py` and move on.
 
 The evaluation automatically records training and benchmark results into `lab/results.json` against the current trial.
 
