@@ -208,13 +208,13 @@ class TestBenchmark(unittest.TestCase):
 
 class TestInstanceData(unittest.TestCase):
     def test_counts(self):
-        self.assertEqual(len(TRAIN_INSTANCES), 3)
-        self.assertEqual(len(BENCHMARK_INSTANCES), 3)
-        self.assertEqual(len(INSTANCES), 6)
+        self.assertEqual(len(TRAIN_INSTANCES), 20)
+        self.assertEqual(len(BENCHMARK_INSTANCES), 5)
+        self.assertEqual(len(INSTANCES), 25)
 
     def test_random_instances_deterministic(self):
         from prepare import _generate_random_instance
-        self.assertEqual(_generate_random_instance(50, seed=770299), list(TRAIN_INSTANCES["rand50"]["coords"]))
+        self.assertEqual(_generate_random_instance(20, seed=142857), list(TRAIN_INSTANCES["rand20a"]["coords"]))
 
     def test_benchmark_have_optimal(self):
         for name, inst in BENCHMARK_INSTANCES.items():

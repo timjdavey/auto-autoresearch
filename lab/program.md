@@ -4,7 +4,7 @@ You are an autonomous research agent. Your goal is to iteratively improve a Trav
 
 ## Project structure
 
-- **`prepare.py`** — Evaluation harness. Contains 6 TSP instances (3 known, 3 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
+- **`prepare.py`** — Evaluation harness. Contains 25 TSP instances (5 known TSPLIB benchmarks, 20 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
 - **`lab/train.py`** — Your solver. Contains a single function `solve(coords)` that receives a list of `(x, y)` coordinate tuples and must return a tour as a list of city indices (a permutation of `0..n-1`). **This is the only file you modify.**
 - **`lab/record.py`** — Experiment tracking CLI and library. Records experiments to `lab/results.json`. **Do not modify.**
 - **`lab/results.json`** — Auto-generated experiment log. Created on first use. **Do not modify directly.**
@@ -14,16 +14,16 @@ You are an autonomous research agent. Your goal is to iteratively improve a Trav
 
 The single number you are optimising is **`avg_improvement`** (higher is better).
 
-It measures how much better your solver is than the nearest-neighbour baseline, averaged across the **3 random training instances** (rand50, rand75, rand100):
+It measures how much better your solver is than the nearest-neighbour baseline, averaged across **20 random training instances** (sizes 20–200 cities):
 
 ```
 improvement = (baseline_length - your_tour_length) / baseline_length
-avg_improvement = mean(improvement for all 3 training instances)
+avg_improvement = mean(improvement for all 20 training instances)
 ```
 
 The baseline is computed once from the nearest-neighbour heuristic and cached. At 0% you match the baseline; at 20% your tours are 20% shorter.
 
-There are also **3 benchmark instances** (berlin52, eil51, kroA100) — well-known TSPLIB problems with published optimal tour lengths. These are evaluated separately using **`avg_loss`** (lower is better):
+There are also **5 benchmark instances** (berlin52, ch150, eil51, kroA100, st70) — well-known TSPLIB problems with published optimal tour lengths. These are evaluated separately using **`avg_loss`** (lower is better):
 
 ```
 loss = (your_tour_length - optimal) / optimal
@@ -35,7 +35,7 @@ A crash or timeout on any training instance incurs an improvement penalty of -10
 
 ## Constraints
 
-- **Time budget**: Each instance has a 30-second wall-clock limit. Your `solve()` function is called 6 times per evaluation (once per instance). Design algorithms that use the time budget wisely — a smarter 25-second algorithm beats a naive 0.1-second one.
+- **Time budget**: Each instance has a 30-second wall-clock limit. Your `solve()` function is called 25 times per evaluation (once per instance). Design algorithms that use the time budget wisely — a smarter 25-second algorithm beats a naive 0.1-second one.
 - **Single file**: All your code must live in `train.py`. You may import from the standard library and `math`. Do not add external dependencies (no numpy, scipy, networkx, etc.) — keep it self-contained.
 - **No hardcoding**: Do not hardcode tours or solutions for specific instances. Your `solve()` function must work as a general algorithm that takes arbitrary coordinates.
 - **No reading prepare.py at runtime for coordinate matching**: Do not detect which instance is being solved to apply instance-specific logic.
@@ -89,10 +89,10 @@ Review the results and record your retrospective:
 
 ```bash
 python -m lab.record reflect \
-  --analysis "2-opt improved rand50 by 8% but rand100 only 2%. Total time well within budget." \
+  --analysis "2-opt improved small instances (rand20-50) by 8% but rand200 only 2%. Total time well within budget." \
   --learnings "2-opt is effective for small instances but diminishing returns on larger ones. Edge density matters." \
   --future "try or-opt or 3-opt for larger instances; consider time-aware iteration" \
-  --abstract "Implemented 2-opt local search. Modest improvement on small instances, limited gains on rand100. Need more sophisticated moves for larger problems."
+  --abstract "Implemented 2-opt local search. Modest improvement on small instances, limited gains on rand200. Need more sophisticated moves for larger problems."
 ```
 
 - **analysis**: Breakdown of the results — what improved, what didn't, by how much.
@@ -125,7 +125,7 @@ The baseline is a nearest-neighbour heuristic (`avg_improvement = 0%`). Here is 
 
 ### Things to think about
 - The time budget is generous (30s per instance). A nearest-neighbour + 2-opt takes milliseconds. You have time for much more.
-- The 100-city instances benefit most from sophisticated algorithms. The 50-city instances are easier — don't over-optimise for them at the expense of larger ones.
+- The larger instances (100–200 cities) benefit most from sophisticated algorithms. The smaller instances (20–50 cities) are easier — don't over-optimise for them at the expense of larger ones.
 - Algorithm simplicity matters when improvement is equal. A clean 2-opt that gets 3% gap is better than a messy heuristic soup that also gets 3%.
 - Track which instances your changes help most. If you're stuck on one instance, focus effort there.
 

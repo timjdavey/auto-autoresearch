@@ -4,17 +4,16 @@ DO NOT MODIFY. The agent may only modify train.py.
 
 Provides two evaluation modes:
 
-  evaluate(solve_fn) — training eval over 3 random instances.
+  evaluate(solve_fn) — training eval over 20 random instances.
     Metric: avg_improvement (higher is better).
     improvement = (baseline_length - tour_length) / baseline_length
     Baseline is nearest-neighbour, computed once and cached.
 
-  benchmark(solve_fn) — benchmark eval over 3 TSPLIB instances.
+  benchmark(solve_fn) — benchmark eval over 5 TSPLIB instances.
     Metric: avg_loss (lower is better).
     loss = (tour_length - optimal) / optimal
 """
 
-import json
 import math
 import random
 import time
@@ -27,18 +26,48 @@ from pathlib import Path
 TIME_BUDGET = 30  # seconds per solve attempt (wall clock)
 
 # ---------------------------------------------------------------------------
-# TSPLIB benchmark instances (loaded from baselines.json)
+# TSPLIB benchmark instances (loaded from baselines/*.tsp files)
 # ---------------------------------------------------------------------------
 
-_BASELINES = json.loads((Path(__file__).parent / "baselines.json").read_text())
+def _parse_tsp_file(filepath):
+    """Parse a TSPLIB .tsp file, return list of (x, y) coordinate tuples.
+
+    Source: TSPLIB95 archive (comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/)
+    Optimal solutions: TSPLIB95 STSP page (comopt.ifi.uni-heidelberg.de/software/TSPLIB95/STSP.html)
+    """
+    coords = []
+    in_coords = False
+    with open(filepath) as f:
+        for line in f:
+            line = line.strip()
+            if line == "NODE_COORD_SECTION":
+                in_coords = True
+            elif in_coords:
+                if line in ("EOF", "") or ":" in line:
+                    break
+                parts = line.split()
+                coords.append((float(parts[1]), float(parts[2])))
+    return coords
+
+# Optimal tour lengths from TSPLIB95 published solutions
+# Source: comopt.ifi.uni-heidelberg.de/software/TSPLIB95/STSP.html
+_OPTIMAL = {
+    "eil51": 426,
+    "berlin52": 7542,
+    "st70": 675,
+    "kroA100": 21282,
+    "ch150": 6528,
+}
+
+_BASELINES_DIR = Path(__file__).parent / "baselines"
 
 BENCHMARK_INSTANCES = {
     name: {
-        "coords": [tuple(c) for c in data["coords"]],
-        "optimal": data["optimal"],
+        "coords": _parse_tsp_file(_BASELINES_DIR / f"{name}.tsp"),
+        "optimal": optimal,
         "known": True,
     }
-    for name, data in _BASELINES.items()
+    for name, optimal in _OPTIMAL.items()
 }
 
 # ---------------------------------------------------------------------------
@@ -51,9 +80,26 @@ def _generate_random_instance(n_cities: int, seed: int, max_coord: int = 10000) 
     return [(rng.randint(0, max_coord), rng.randint(0, max_coord)) for _ in range(n_cities)]
 
 TRAIN_INSTANCES = {
-    "rand50":  {"coords": _generate_random_instance(50,  seed=770299), "optimal": None, "known": False},
-    "rand75":  {"coords": _generate_random_instance(75,  seed=831401), "optimal": None, "known": False},
-    "rand100": {"coords": _generate_random_instance(100, seed=952867), "optimal": None, "known": False},
+    "rand20a":  {"coords": _generate_random_instance(20,  seed=142857), "optimal": None, "known": False},
+    "rand20b":  {"coords": _generate_random_instance(20,  seed=285714), "optimal": None, "known": False},
+    "rand30a":  {"coords": _generate_random_instance(30,  seed=314159), "optimal": None, "known": False},
+    "rand30b":  {"coords": _generate_random_instance(30,  seed=271828), "optimal": None, "known": False},
+    "rand50a":  {"coords": _generate_random_instance(50,  seed=577215), "optimal": None, "known": False},
+    "rand50b":  {"coords": _generate_random_instance(50,  seed=161803), "optimal": None, "known": False},
+    "rand50c":  {"coords": _generate_random_instance(50,  seed=236067), "optimal": None, "known": False},
+    "rand50d":  {"coords": _generate_random_instance(50,  seed=141421), "optimal": None, "known": False},
+    "rand75a":  {"coords": _generate_random_instance(75,  seed=173205), "optimal": None, "known": False},
+    "rand75b":  {"coords": _generate_random_instance(75,  seed=223606), "optimal": None, "known": False},
+    "rand75c":  {"coords": _generate_random_instance(75,  seed=264575), "optimal": None, "known": False},
+    "rand75d":  {"coords": _generate_random_instance(75,  seed=316227), "optimal": None, "known": False},
+    "rand100a": {"coords": _generate_random_instance(100, seed=346410), "optimal": None, "known": False},
+    "rand100b": {"coords": _generate_random_instance(100, seed=374165), "optimal": None, "known": False},
+    "rand100c": {"coords": _generate_random_instance(100, seed=412310), "optimal": None, "known": False},
+    "rand100d": {"coords": _generate_random_instance(100, seed=447213), "optimal": None, "known": False},
+    "rand150a": {"coords": _generate_random_instance(150, seed=483568), "optimal": None, "known": False},
+    "rand150b": {"coords": _generate_random_instance(150, seed=509901), "optimal": None, "known": False},
+    "rand200a": {"coords": _generate_random_instance(200, seed=538516), "optimal": None, "known": False},
+    "rand200b": {"coords": _generate_random_instance(200, seed=567128), "optimal": None, "known": False},
 }
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
@@ -113,9 +159,26 @@ def _nn_solve(coords: list[tuple[int, int]]) -> list[int]:
     return tour
 
 NN_BASELINES = {
-    "rand50": 67578.16163993768,
-    "rand75": 80762.1187601478,
-    "rand100": 92928.91055244379,
+    "rand20a": 39587.044174362425,
+    "rand20b": 40842.76058618296,
+    "rand30a": 57485.3313339793,
+    "rand30b": 59994.76856526547,
+    "rand50a": 71140.87654979469,
+    "rand50b": 81396.97894233433,
+    "rand50c": 66471.09699727633,
+    "rand50d": 70741.68175324058,
+    "rand75a": 78169.84343551836,
+    "rand75b": 85407.94029874004,
+    "rand75c": 87305.14519900268,
+    "rand75d": 85693.18727546492,
+    "rand100a": 96800.24669345064,
+    "rand100b": 106996.82632505952,
+    "rand100c": 89833.000561935,
+    "rand100d": 94778.6431453671,
+    "rand150a": 108224.7699586495,
+    "rand150b": 112584.70702871727,
+    "rand200a": 137823.6598990963,
+    "rand200b": 138506.1234535633,
 }
 
 # ---------------------------------------------------------------------------
