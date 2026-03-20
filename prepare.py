@@ -14,9 +14,13 @@ Provides two evaluation modes:
     loss = (tour_length - optimal) / optimal
 """
 
+import csv
+import json
 import math
+import os
 import random
 import time
+from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -271,6 +275,30 @@ def benchmark(solve_fn) -> dict:
     return _evaluate_instances(BENCHMARK_INSTANCES, solve_fn, metric_fn, penalty=10.0, summary_key="avg_loss")
 
 
+# ---------------------------------------------------------------------------
+# Stable evaluation log (not editable by Supervisor)
+# ---------------------------------------------------------------------------
+
+EVAL_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "evaluations.csv")
+EVAL_FIELDS = ["timestamp", "avg_improvement", "avg_loss", "training_time", "benchmark_time"]
+
+
+def log_evaluation(train_results, bench_results):
+    """Append a stable evaluation record to lab/evaluations.csv."""
+    write_header = not os.path.exists(EVAL_LOG_PATH)
+    with open(EVAL_LOG_PATH, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=EVAL_FIELDS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "avg_improvement": train_results.get("avg_improvement"),
+            "avg_loss": bench_results.get("avg_loss"),
+            "training_time": train_results.get("total_time"),
+            "benchmark_time": bench_results.get("total_time"),
+        })
+
+
 if __name__ == "__main__":
     from lab.train import solve
     from lab.record import training_results, benchmark_results
@@ -280,3 +308,5 @@ if __name__ == "__main__":
 
     bench_results = benchmark(solve)
     benchmark_results(bench_results)
+
+    log_evaluation(train_results, bench_results)

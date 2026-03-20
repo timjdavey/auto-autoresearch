@@ -21,8 +21,22 @@ python study.py --persistent --trials 10     # persistent, with ~10 trial hint
 ### What you can change
 - `lab/program.md` — the Scientist's instructions
 - `lab/record.py` — trial recording tools
-- Anything else inside `lab/` (except for `train.py` as this is the Scientists code)
+- Anything else inside `lab/` (except for `train.py` and `evaluations.csv` as noted below)
 
 ### What you must NOT change
 - `study.py`, `method.md` — top-level orchestration (locked)
 - `prepare.py`, `test_prepare.py` — evaluation framework (locked)
+- `evaluate.py` — post-study analysis (locked)
+- `lab/evaluations.csv` — stable evaluation log (locked, written by `prepare.py`)
+
+### Dual recording
+
+There are two recording systems. The Scientist-facing one (`lab/record.py`) can be freely edited by the Supervisor. The evaluation log (`lab/evaluations.csv`) is written automatically by `prepare.py` every time it runs and must not be modified. This stable log is used by `evaluate.py` to assess Scientist progress after a study.
+
+### Evaluating a study
+
+After a study completes, run:
+```
+python evaluate.py
+```
+This reads `lab/evaluations.csv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
