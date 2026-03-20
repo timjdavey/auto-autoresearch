@@ -14,80 +14,35 @@ Provides two evaluation modes:
     loss = (tour_length - optimal) / optimal
 """
 
+import json
 import math
-import time
 import random
+import time
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Constants (fixed, do not modify)
+# Constants
 # ---------------------------------------------------------------------------
 
 TIME_BUDGET = 30  # seconds per solve attempt (wall clock)
 
 # ---------------------------------------------------------------------------
-# TSPLIB instances (known optimal solutions)
-# Coordinates sourced from TSPLIB. Optimal tour lengths are published.
+# TSPLIB benchmark instances (loaded from baselines.json)
 # ---------------------------------------------------------------------------
 
-# berlin52: 52 locations in Berlin. Optimal = 7542
-BERLIN52_COORDS = [
-    (565,575),(25,185),(345,750),(945,685),(845,655),
-    (880,660),(25,230),(525,1000),(580,1175),(650,1130),
-    (1605,620),(1220,580),(1465,200),(1530,5),(845,680),
-    (725,370),(145,665),(415,635),(510,875),(560,365),
-    (300,465),(520,585),(480,415),(835,625),(975,580),
-    (1215,245),(1320,315),(1250,400),(660,180),(410,250),
-    (420,555),(575,665),(1150,1160),(700,580),(685,595),
-    (685,610),(770,610),(795,645),(720,635),(760,650),
-    (475,960),(95,260),(875,920),(700,500),(555,815),
-    (830,485),(1170,65),(830,610),(605,625),(595,360),
-    (1340,725),(1740,245),
-]
-BERLIN52_OPTIMAL = 7542
+_BASELINES = json.loads((Path(__file__).parent / "baselines.json").read_text())
 
-# eil51: 51 cities. Optimal = 426
-EIL51_COORDS = [
-    (37,52),(49,49),(52,64),(20,26),(40,30),
-    (21,47),(17,63),(31,62),(52,33),(51,21),
-    (42,41),(31,32),(5,25),(12,42),(36,16),
-    (52,41),(27,23),(17,33),(13,13),(57,58),
-    (62,42),(42,57),(16,57),(8,52),(7,38),
-    (27,68),(30,48),(43,67),(58,48),(58,27),
-    (37,69),(38,46),(46,10),(61,33),(62,63),
-    (63,69),(32,22),(45,35),(59,15),(5,6),
-    (10,17),(21,10),(5,64),(30,15),(39,10),
-    (32,39),(25,32),(25,55),(48,28),(56,37),
-    (30,40),
-]
-EIL51_OPTIMAL = 426
-
-# kroA100: 100 cities. Optimal = 21282
-KROA100_COORDS = [
-    (1380,939),(2848,96),(3510,1671),(457,334),(3888,666),
-    (984,965),(2721,1482),(1286,525),(2716,1432),(738,1325),
-    (1251,1832),(2728,1698),(3815,169),(3683,1533),(1247,1945),
-    (123,862),(1234,1946),(252,1240),(611,673),(2576,1676),
-    (928,1700),(53,857),(2301,1718),(2631,302),(1100,2153),
-    (3918,1012),(3780,1044),(1944,1622),(2510,832),(3455,1782),
-    (1150,1041),(2688,1305),(3010,1969),(2895,1675),(3329,841),
-    (3500,1214),(1605,1417),(1255,1462),(555,2174),(1151,2076),
-    (2941,749),(2611,1222),(2163,2049),(2710,1780),(3272,1924),
-    (1632,2060),(3022,2037),(2483,1455),(1,1857),(1764,37),
-    (2848,1230),(2967,1868),(2665,2130),(3249,920),(3266,1561),
-    (2693,1862),(1015,1929),(2009,1881),(2366,1040),(2234,1672),
-    (3312,790),(2578,1490),(2989,1500),(2914,1869),(3195,1825),
-    (2244,1781),(3074,379),(2828,1857),(3371,1488),(3258,1861),
-    (2298,1553),(3426,1048),(2438,1318),(3585,1235),(2417,76),
-    (2535,1015),(1327,1893),(1801,672),(2810,1681),(2014,1686),
-    (2732,1285),(1555,1428),(2052,1778),(1344,1694),(1910,541),
-    (3159,1700),(1290,1914),(2569,1564),(2278,1198),(1191,1366),
-    (1167,1695),(2529,1655),(2738,1365),(3326,1001),(652,1577),
-    (1222,1615),(2834,1268),(1490,1543),(2013,1841),(2012,1868),
-]
-KROA100_OPTIMAL = 21282
+BENCHMARK_INSTANCES = {
+    name: {
+        "coords": [tuple(c) for c in data["coords"]],
+        "optimal": data["optimal"],
+        "known": True,
+    }
+    for name, data in _BASELINES.items()
+}
 
 # ---------------------------------------------------------------------------
-# Random instances (unknown optimal — no memorisation possible)
+# Random training instances (unknown optimal — no memorisation possible)
 # ---------------------------------------------------------------------------
 
 def _generate_random_instance(n_cities: int, seed: int, max_coord: int = 10000) -> list[tuple[int, int]]:
@@ -95,29 +50,12 @@ def _generate_random_instance(n_cities: int, seed: int, max_coord: int = 10000) 
     rng = random.Random(seed)
     return [(rng.randint(0, max_coord), rng.randint(0, max_coord)) for _ in range(n_cities)]
 
-RANDOM_50  = _generate_random_instance(50,  seed=770299)
-RANDOM_75  = _generate_random_instance(75,  seed=831401)
-RANDOM_100 = _generate_random_instance(100, seed=952867)
-
-# ---------------------------------------------------------------------------
-# Instance sets
-# ---------------------------------------------------------------------------
-
-# Training instances — random, no known optimal. The agent optimises against these.
 TRAIN_INSTANCES = {
-    "rand50":   {"coords": RANDOM_50,  "optimal": None, "known": False},
-    "rand75":   {"coords": RANDOM_75,  "optimal": None, "known": False},
-    "rand100":  {"coords": RANDOM_100, "optimal": None, "known": False},
+    "rand50":  {"coords": _generate_random_instance(50,  seed=770299), "optimal": None, "known": False},
+    "rand75":  {"coords": _generate_random_instance(75,  seed=831401), "optimal": None, "known": False},
+    "rand100": {"coords": _generate_random_instance(100, seed=952867), "optimal": None, "known": False},
 }
 
-# Benchmark instances — TSPLIB with published optima. For independent progress checking.
-BENCHMARK_INSTANCES = {
-    "berlin52": {"coords": BERLIN52_COORDS, "optimal": BERLIN52_OPTIMAL, "known": True},
-    "eil51":    {"coords": EIL51_COORDS,    "optimal": EIL51_OPTIMAL,    "known": True},
-    "kroA100":  {"coords": KROA100_COORDS,  "optimal": KROA100_OPTIMAL,  "known": True},
-}
-
-# All instances (union)
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 
 # ---------------------------------------------------------------------------
@@ -147,7 +85,7 @@ def validate_tour(coords: list[tuple[int, int]], tour: list[int]) -> str | None:
     return None
 
 # ---------------------------------------------------------------------------
-# Nearest-neighbour baseline (reference for training improvement metric)
+# Nearest-neighbour baseline
 # ---------------------------------------------------------------------------
 
 def _nn_solve(coords: list[tuple[int, int]]) -> list[int]:
@@ -174,7 +112,6 @@ def _nn_solve(coords: list[tuple[int, int]]) -> list[int]:
         visited[best_city] = True
     return tour
 
-
 NN_BASELINES = {
     "rand50": 67578.16163993768,
     "rand75": 80762.1187601478,
@@ -182,7 +119,7 @@ NN_BASELINES = {
 }
 
 # ---------------------------------------------------------------------------
-# Evaluation
+# Evaluation core
 # ---------------------------------------------------------------------------
 
 def _run_solver(solve_fn, coords):
@@ -204,6 +141,43 @@ def _run_solver(solve_fn, coords):
     return tour, elapsed
 
 
+def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
+    """
+    Shared evaluation loop for both training and benchmark modes.
+
+    metric_fn(length, inst, name) -> (metric_value, extra_fields_dict)
+    """
+    results = {}
+    total_time = 0.0
+    metrics = []
+
+    for name, inst in instances.items():
+        coords = inst["coords"]
+        result, elapsed = _run_solver(solve_fn, coords)
+        total_time += elapsed
+
+        if isinstance(result, str):
+            results[name] = {"valid": False, "error": result, "time": elapsed}
+            metrics.append(penalty)
+            continue
+
+        length = tour_length(coords, result)
+        metric, extra = metric_fn(length, inst, name)
+        results[name] = {
+            "valid": True,
+            "tour_length": round(length, 2),
+            **{k: round(v, 6) if isinstance(v, float) else v for k, v in extra.items()},
+            "time": round(elapsed, 3),
+        }
+        metrics.append(metric)
+
+    results[summary_key] = round(
+        sum(metrics) / len(metrics) if metrics else penalty, 6
+    )
+    results["total_time"] = round(total_time, 3)
+    return results
+
+
 def evaluate(solve_fn) -> dict:
     """
     Evaluate against training instances (random).
@@ -211,39 +185,12 @@ def evaluate(solve_fn) -> dict:
 
     improvement = (baseline - tour_length) / baseline
     """
-    baselines = NN_BASELINES
-    results = {}
-    total_time = 0.0
-    improvements = []
-
-    for name, inst in TRAIN_INSTANCES.items():
-        coords = inst["coords"]
-        result, elapsed = _run_solver(solve_fn, coords)
-        total_time += elapsed
-
-        if isinstance(result, str):
-            results[name] = {"valid": False, "error": result, "time": elapsed}
-            improvements.append(-10.0)  # heavy penalty for crash
-            continue
-
-        length = tour_length(coords, result)
-        baseline = baselines[name]
+    def metric_fn(length, inst, name):
+        baseline = NN_BASELINES[name]
         improvement = (baseline - length) / baseline
+        return improvement, {"baseline": round(baseline, 2), "improvement": improvement}
 
-        results[name] = {
-            "valid": True,
-            "tour_length": round(length, 2),
-            "baseline": round(baseline, 2),
-            "improvement": round(improvement, 6),
-            "time": round(elapsed, 3),
-        }
-        improvements.append(improvement)
-
-    results["avg_improvement"] = round(
-        sum(improvements) / len(improvements) if improvements else -10.0, 6
-    )
-    results["total_time"] = round(total_time, 3)
-    return results
+    return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
 
 
 def benchmark(solve_fn) -> dict:
@@ -253,38 +200,13 @@ def benchmark(solve_fn) -> dict:
 
     loss = (tour_length - optimal) / optimal
     """
-    results = {}
-    total_time = 0.0
-    losses = []
-
-    for name, inst in BENCHMARK_INSTANCES.items():
-        coords = inst["coords"]
-        result, elapsed = _run_solver(solve_fn, coords)
-        total_time += elapsed
-
-        if isinstance(result, str):
-            results[name] = {"valid": False, "error": result, "time": elapsed}
-            losses.append(10.0)  # heavy penalty for crash
-            continue
-
-        length = tour_length(coords, result)
+    def metric_fn(length, inst, name):
         optimal = float(inst["optimal"])
         loss = (length - optimal) / optimal
+        return loss, {"optimal": round(optimal, 2), "loss": loss}
 
-        results[name] = {
-            "valid": True,
-            "tour_length": round(length, 2),
-            "optimal": round(optimal, 2),
-            "loss": round(loss, 6),
-            "time": round(elapsed, 3),
-        }
-        losses.append(loss)
+    return _evaluate_instances(BENCHMARK_INSTANCES, solve_fn, metric_fn, penalty=10.0, summary_key="avg_loss")
 
-    results["avg_loss"] = round(
-        sum(losses) / len(losses) if losses else 10.0, 6
-    )
-    results["total_time"] = round(total_time, 3)
-    return results
 
 if __name__ == "__main__":
     from lab.train import solve
