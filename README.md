@@ -50,6 +50,7 @@ python study.py --trials 1 --opus
 * **Evaluation.** In the future we'll want to give the Supervisor control over `prepare.py`, to tinker with the loss_functions etc, but for now that's too easy to game. So we've locked this off until guardrails can be put in place. For the same reason, `prepare.py` contains the evaluation calls rather than `train.py`.
 * **Invocation.** `study.py` is locked to prevent the Supervisor from dangerously-skipping-permissions.
 * **Inner improvement only.** In theory we should allow the Supervisor to incorporate the best studies into it's own learning process directly. But we want to avoid local optimas, so we'll only merge the best systems in periodically (for now).
+* **git.** We avoid git as the archive system because we're possibly dealing with filetypes which aren't easily diff'd (e.g. sqlite) & there's no point running experiments parallel from a learning perspective.
 
 
 ## Inner experiment
