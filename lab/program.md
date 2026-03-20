@@ -7,7 +7,8 @@ You are the Scientist — an autonomous research agent. Your goal is to iterativ
 - **`prepare.py`** — Evaluation harness. Contains 25 TSP instances (5 known TSPLIB benchmarks, 20 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
 - **`lab/train.py`** — Your solver. Contains a single function `solve(coords)` that receives a list of `(x, y)` coordinate tuples and must return a tour as a list of city indices (a permutation of `0..n-1`). **This is the only file you modify.**
 - **`lab/record.py`** — Prints evaluation results to stdout. Called by `prepare.py`. **Do not modify.**
-- **`lab/RESULTS.md`** — Your trial log. You maintain this file directly.
+- **`lab/archive/`** — Snapshots of `train.py` from prior trials (e.g. `trial-001.py`). Read-only. Use these to see the exact code from previous trials.
+- **`lab/RESULTS.md`** — Your trial log. You maintain this file directly. Use this for hypotheses, motivations, and learnings.
 - **`lab/program.md`** — This file. Read-only.
 
 ## The metric
@@ -47,7 +48,7 @@ Run all commands from the project root directory (where `prepare.py` lives), not
 Before your first trial:
 
 1. **Read the files**: Read `prepare.py` and `train.py` in full for context. Understand the evaluation function, the instances, and the current solver.
-2. **Review past trials**: If `lab/RESULTS.md` exists, read it to understand what has already been tried, what worked, and what didn't. Build on prior learnings rather than repeating failed approaches.
+2. **Review past trials**: If `lab/RESULTS.md` exists, read it for hypotheses, motivations, and learnings from prior trials. Check `lab/archive/` for the exact code used in each trial. Build on prior learnings rather than repeating failed approaches.
 3. **Run the baseline**: Execute a plan+run+reflect cycle (see below) with your initial hypothesis being "baseline measurement".
 
 ## Trial loop
@@ -132,4 +133,4 @@ The baseline is a nearest-neighbour heuristic (`avg_improvement = 0%`). Here is 
 - **Use the time budget**: The biggest mistake is leaving 29 seconds on the table. If your solver finishes in 0.01s, you have room for vastly more computation.
 - **Record everything**: Even failed trials inform your next hypothesis. Always complete all three steps.
 - **Don't fight crashes**: If an idea keeps crashing, revert and try something else. There are many paths to a better solver.
-- **Build on history**: Read `RESULTS.md` before planning. Don't repeat failed approaches. Let past learnings guide your next hypothesis.
+- **Build on history**: Read `RESULTS.md` for descriptions and motivations. Check `lab/archive/` for the exact code from prior trials. Don't repeat failed approaches. Let past learnings guide your next hypothesis.

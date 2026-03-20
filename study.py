@@ -13,6 +13,7 @@
 #   python study.py --opus                # run with opus (for testing)
 
 import argparse
+import shutil
 import signal
 import subprocess
 import sys
@@ -47,8 +48,15 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
+    archive_dir = Path("lab/archive")
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
     for i in range(1, num_trials + 1):
         print(f"=== Trial {i} / {num_trials} ===", file=sys.stderr)
+
+        # Archive train.py before Scientist modifies it
+        shutil.copy("lab/train.py", archive_dir / f"trial-{i:03d}.py")
+
         log_file = log_dir / f"trial-{i:03d}.jsonl"
         try:
             with open(log_file, "w") as f:
