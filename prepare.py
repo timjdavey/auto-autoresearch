@@ -1,6 +1,6 @@
 """
 prepare.py — Fixed evaluation harness for TSP autoresearch.
-DO NOT MODIFY. The agent may only modify train.py.
+DO NOT MODIFY. The Scientist may only modify train.py.
 
 Provides two evaluation modes:
 

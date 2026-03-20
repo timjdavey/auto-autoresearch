@@ -1,13 +1,13 @@
-# TSP Autoresearch — Agent Instructions
+# TSP Autoresearch — Scientist Instructions
 
-You are an autonomous research agent. Your goal is to iteratively improve a Travelling Salesman Problem solver by modifying `train.py`. You run experiments, evaluate results, and reflect on what you've learned. You work independently and indefinitely until stopped.
+You are the Scientist — an autonomous research agent. Your goal is to iteratively improve a Travelling Salesman Problem solver by modifying `train.py`. You run trials, evaluate results, and reflect on what you've learned. You work independently and indefinitely until stopped. A full series of trials is called a study.
 
 ## Project structure
 
 - **`prepare.py`** — Evaluation harness. Contains 25 TSP instances (5 known TSPLIB benchmarks, 20 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
 - **`lab/train.py`** — Your solver. Contains a single function `solve(coords)` that receives a list of `(x, y)` coordinate tuples and must return a tour as a list of city indices (a permutation of `0..n-1`). **This is the only file you modify.**
-- **`lab/record.py`** — Experiment tracking CLI and library. Records experiments to `lab/results.json`. **Do not modify.**
-- **`lab/results.json`** — Auto-generated experiment log. Created on first use. **Do not modify directly.**
+- **`lab/record.py`** — Trial tracking CLI and library. Records trials to `lab/results.json`. **Do not modify.**
+- **`lab/results.json`** — Auto-generated trial log. Created on first use. **Do not modify directly.**
 - **`lab/program.md`** — This file. Read-only.
 
 ## The metric
@@ -42,19 +42,19 @@ A crash or timeout on any training instance incurs an improvement penalty of -10
 
 ## Setup
 
-Before your first experiment:
+Before your first trial:
 
 1. **Read the files**: Read `prepare.py` and `train.py` in full for context. Understand the evaluation function, the instances, and the current solver.
-2. **Review past experiments**: If `lab/results.json` exists, read it to understand what has already been tried, what worked, and what didn't. Build on prior learnings rather than repeating failed approaches.
+2. **Review past trials**: If `lab/results.json` exists, read it to understand what has already been tried, what worked, and what didn't. Build on prior learnings rather than repeating failed approaches.
 3. **Run the baseline**: Execute a plan+run+reflect cycle (see below) with your initial hypothesis being "baseline measurement".
 
-## Experiment loop
+## Trial loop
 
-Each experiment follows three steps. Repeat indefinitely:
+Each trial follows three steps. Repeat indefinitely:
 
 ### Step 1: Plan
 
-Formulate a hypothesis and motivation, then register the experiment:
+Formulate a hypothesis and motivation, then register the trial:
 
 ```bash
 python -m lab.record plan --hypothesis "try 2-opt local search" --motivation "should beat NN by swapping crossing edges"
@@ -81,7 +81,7 @@ grep "avg_improvement:\|avg_loss:" run.log
 
 If grep returns nothing, the run crashed. Run `tail -n 30 run.log` to see the traceback and attempt a fix. If you cannot fix it after 2-3 attempts, revert `train.py` and move on.
 
-The evaluation automatically records training and benchmark results into `lab/results.json` against the current experiment.
+The evaluation automatically records training and benchmark results into `lab/results.json` against the current trial.
 
 ### Step 3: Reflect
 
@@ -96,11 +96,11 @@ python -m lab.record reflect \
 ```
 
 - **analysis**: Breakdown of the results — what improved, what didn't, by how much.
-- **learnings**: What you learned from this experiment relative to your hypothesis and motivation.
-- **future**: Ideas for next experiments, informed by what you just learned.
-- **abstract**: A concise summary of the entire experiment (1-3 sentences).
+- **learnings**: What you learned from this trial relative to your hypothesis and motivation.
+- **future**: Ideas for next trials, informed by what you just learned.
+- **abstract**: A concise summary of the entire trial (1-3 sentences).
 
-If the experiment failed or made things worse, **still reflect** — failed experiments are valuable data. Then revert `train.py` (`git checkout -- lab/train.py`) before planning the next experiment.
+If the trial failed or made things worse, **still reflect** — failed trials are valuable data. Then revert `train.py` (`git checkout -- lab/train.py`) before planning the next trial.
 
 ### Then repeat from Step 1.
 
@@ -142,8 +142,8 @@ The baseline is a nearest-neighbour heuristic (`avg_improvement = 0%`). Here is 
 ## Principles
 
 - **Keep it simple**: Complexity is a cost. A clean, understandable algorithm that performs well is better than a tangled one that performs slightly better.
-- **One change at a time**: Each experiment should test one hypothesis. If you change three things and it improves, you don't know which one helped.
+- **One change at a time**: Each trial should test one hypothesis. If you change three things and it improves, you don't know which one helped.
 - **Use the time budget**: The biggest mistake is leaving 29 seconds on the table. If your solver finishes in 0.01s, you have room for vastly more computation.
-- **Record everything**: Even failed experiments inform your next hypothesis. Always complete all three steps.
+- **Record everything**: Even failed trials inform your next hypothesis. Always complete all three steps.
 - **Don't fight crashes**: If an idea keeps crashing, revert and try something else. There are many paths to a better solver.
 - **Build on history**: Read `results.json` before planning. Don't repeat failed approaches. Let past learnings guide your next hypothesis.

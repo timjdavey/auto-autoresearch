@@ -1,6 +1,6 @@
 """
-record.py — Experiment recording and display for TSP autoresearch.
-Edited by the outer agent.
+record.py — Trial recording and display for TSP autoresearch.
+Edited by the Supervisor.
 
 Usage as CLI:
     python -m lab.record plan --hypothesis "..." --motivation "..."
@@ -28,20 +28,20 @@ def _save_results(results):
         json.dump(results, f, indent=2)
 
 
-def plan_experiment(hypothesis, motivation):
-    """Step 1: Create a new experiment entry with hypothesis and motivation."""
+def plan_trial(hypothesis, motivation):
+    """Step 1: Create a new trial entry with hypothesis and motivation."""
     now = datetime.now()
-    experiment = {
+    trial = {
         "id": now.strftime("%Y%m%d-%H%M%S"),
         "timestamp": now.isoformat(timespec="seconds"),
         "hypothesis": hypothesis,
         "motivation": motivation,
     }
     results = _load_results()
-    results.append(experiment)
+    results.append(trial)
     _save_results(results)
-    print(f"Experiment {experiment['id']} created.")
-    return experiment
+    print(f"Trial {trial['id']} created.")
+    return trial
 
 
 def training_results(results: dict):
@@ -63,11 +63,11 @@ def training_results(results: dict):
     print(f"  avg_improvement: {results['avg_improvement']}")
     print(f"  total_time: {results['total_time']}s")
 
-    # Append to current experiment
-    experiments = _load_results()
-    if experiments:
-        experiments[-1]["training_results"] = results
-        _save_results(experiments)
+    # Append to current trial
+    trials = _load_results()
+    if trials:
+        trials[-1]["training_results"] = results
+        _save_results(trials)
 
 
 def benchmark_results(results: dict):
@@ -89,40 +89,40 @@ def benchmark_results(results: dict):
     print(f"  avg_loss: {results['avg_loss']}")
     print(f"  total_time: {results['total_time']}s")
 
-    # Append to current experiment
-    experiments = _load_results()
-    if experiments:
-        experiments[-1]["benchmark_results"] = results
-        _save_results(experiments)
+    # Append to current trial
+    trials = _load_results()
+    if trials:
+        trials[-1]["benchmark_results"] = results
+        _save_results(trials)
 
 
-def reflect_experiment(analysis, learnings, future, abstract):
-    """Step 3: Add retrospective to the latest experiment."""
-    experiments = _load_results()
-    if not experiments:
-        print("Error: no experiment to reflect on. Run 'plan' first.")
+def reflect_trial(analysis, learnings, future, abstract):
+    """Step 3: Add retrospective to the latest trial."""
+    trials = _load_results()
+    if not trials:
+        print("Error: no trial to reflect on. Run 'plan' first.")
         return
-    experiments[-1].update({
+    trials[-1].update({
         "analysis": analysis,
         "learnings": learnings,
         "future": future,
         "abstract": abstract,
     })
-    _save_results(experiments)
-    print(f"Experiment {experiments[-1]['id']} reflection recorded.")
+    _save_results(trials)
+    print(f"Trial {trials[-1]['id']} reflection recorded.")
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(prog="lab.record", description="Experiment tracking CLI")
+    parser = argparse.ArgumentParser(prog="lab.record", description="Trial tracking CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    plan_p = sub.add_parser("plan", help="Create a new experiment")
+    plan_p = sub.add_parser("plan", help="Create a new trial")
     plan_p.add_argument("--hypothesis", required=True)
     plan_p.add_argument("--motivation", required=True)
 
-    reflect_p = sub.add_parser("reflect", help="Add retrospective to latest experiment")
+    reflect_p = sub.add_parser("reflect", help="Add retrospective to latest trial")
     reflect_p.add_argument("--analysis", required=True)
     reflect_p.add_argument("--learnings", required=True)
     reflect_p.add_argument("--future", required=True)
@@ -131,6 +131,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "plan":
-        plan_experiment(args.hypothesis, args.motivation)
+        plan_trial(args.hypothesis, args.motivation)
     elif args.command == "reflect":
-        reflect_experiment(args.analysis, args.learnings, args.future, args.abstract)
+        reflect_trial(args.analysis, args.learnings, args.future, args.abstract)
