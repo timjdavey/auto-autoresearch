@@ -31,10 +31,8 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 
 def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
-    """Run a campaign and return the campaign ID."""
-    campaign_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_dir = Path("logs") / campaign_id
-    log_dir.mkdir(parents=True, exist_ok=True)
+    """Run a campaign of sequential studies."""
+    from evaluate import analyse_and_save
 
     claude_cmd = [
         "claude", "-p",
@@ -45,10 +43,11 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
     ]
 
     for i in range(1, num_studies + 1):
-        print(f"=== Study {i} / {num_studies} ===", file=sys.stderr)
+        study_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        print(f"=== Study {i} / {num_studies} ({study_timestamp}) ===", file=sys.stderr)
 
         # Archive current lab state
-        archive_dir = Path("archive") / campaign_id / f"study-{i:03d}"
+        archive_dir = Path("archive") / study_timestamp
         shutil.copytree("lab", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
         print(f"  Archived lab/ → {archive_dir}", file=sys.stderr)
 
@@ -58,16 +57,18 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
         # Git commit current state
         subprocess.run(["git", "add", "-A"], check=False)
         subprocess.run(
-            ["git", "commit", "-m", f"campaign {campaign_id}: archive study {i} results"],
+            ["git", "commit", "-m", f"archive study {study_timestamp}"],
             check=False,
         )
 
         # Delete ephemeral files
-        Path("lab/evaluations.csv").unlink(missing_ok=True)
+        Path("lab/results.csv").unlink(missing_ok=True)
         Path("lab/RESULTS.md").unlink(missing_ok=True)
 
         # Run the Supervisor
-        log_file = log_dir / f"study-{i:03d}.jsonl"
+        log_dir = Path("logs") / study_timestamp
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"study.jsonl"
         try:
             with open(log_file, "w") as f:
                 subprocess.run(
@@ -81,7 +82,16 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
         except subprocess.TimeoutExpired:
             print(f"=== Study {i} timed out after {study_timeout}s, skipping ===", file=sys.stderr)
 
-    return campaign_id
+        # Evaluate study and persist results
+        try:
+            stats = analyse_and_save(timestamp=study_timestamp)
+            if stats:
+                print(f"  Study result: improvement={stats['total_improvement']:+.6f}, "
+                      f"velocity={stats['overall_velocity']:+.6f}/trial", file=sys.stderr)
+            else:
+                print(f"  Study result: too few trials to analyse", file=sys.stderr)
+        except Exception as e:
+            print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
@@ -91,5 +101,4 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Claude model to use (default: {DEFAULT_MODEL})")
     args = parser.parse_args()
 
-    campaign_id = run_campaign(num_studies=args.studies, study_timeout=args.timeout, model=args.model)
-    print(f"Campaign: {campaign_id}", file=sys.stderr)
+    run_campaign(num_studies=args.studies, study_timeout=args.timeout, model=args.model)

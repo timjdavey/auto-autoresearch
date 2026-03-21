@@ -1,6 +1,6 @@
 """
 evaluate.py — Analyse Scientist progress after a study completes.
-Reads the stable log at lab/evaluations.csv (written by prepare.py).
+Reads the stable log at lab/results.csv (written by prepare.py).
 
 Usage:
     python evaluate.py
@@ -9,15 +9,16 @@ Usage:
 import csv
 import os
 import sys
+from datetime import datetime
 
-EVAL_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "evaluations.csv")
+RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.csv")
 
 
-def load_evaluations():
-    """Load all rows from evaluations.csv, returning list of dicts with floats."""
-    if not os.path.exists(EVAL_LOG_PATH):
+def load_results():
+    """Load all rows from results.csv, returning list of dicts with floats."""
+    if not os.path.exists(RESULTS_LOG_PATH):
         return []
-    with open(EVAL_LOG_PATH, newline="") as f:
+    with open(RESULTS_LOG_PATH, newline="") as f:
         rows = []
         for row in csv.DictReader(f):
             rows.append({
@@ -81,10 +82,42 @@ def print_report(stats):
         print(f"  Tailing off: no")
 
 
+STUDY_FIELDS = [
+    "timestamp", "num_trials",
+    "first_avg_improvement", "last_avg_improvement",
+    "total_improvement", "improvement_per_trial",
+    "tail_trials", "tail_velocity", "overall_velocity", "tailing_off",
+]
+
+STUDY_RESULTS_PATH = os.path.join(os.path.dirname(__file__), "study_results.csv")
+
+
+def analyse_and_save(timestamp=None, output_path=None):
+    """Analyse current study results and append summary to persistent CSV."""
+    if timestamp is None:
+        timestamp = datetime.now().isoformat(timespec="seconds")
+    if output_path is None:
+        output_path = STUDY_RESULTS_PATH
+    rows = load_results()
+    if len(rows) < 2:
+        return None
+    stats = analyse(rows)
+    write_header = not os.path.exists(output_path)
+    with open(output_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=STUDY_FIELDS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "timestamp": timestamp,
+            **{k: stats[k] for k in STUDY_FIELDS[1:]},
+        })
+    return stats
+
+
 if __name__ == "__main__":
-    rows = load_evaluations()
+    rows = load_results()
     if not rows:
-        print("No evaluations found. Run a study first.")
+        print("No results found. Run a study first.")
         sys.exit(1)
     if len(rows) < 2:
         print("Only 1 trial recorded. Need at least 2 for analysis.")

@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 import evaluate
-from evaluate import analyse, load_evaluations, print_report
+from evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
 
 
 def _row(avg_improvement, avg_loss=0.1, training_time=1.0, benchmark_time=0.5):
@@ -85,10 +85,10 @@ class TestAnalyse(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# load_evaluations
+# load_results
 # ---------------------------------------------------------------------------
 
-class TestLoadEvaluations(unittest.TestCase):
+class TestLoadResults(unittest.TestCase):
     def test_load_valid_csv(self):
         csv_content = (
             "timestamp,avg_improvement,avg_loss,training_time,benchmark_time\n"
@@ -100,8 +100,8 @@ class TestLoadEvaluations(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            with patch.object(evaluate, "EVAL_LOG_PATH", tmp_path):
-                rows = load_evaluations()
+            with patch.object(evaluate, "RESULTS_LOG_PATH", tmp_path):
+                rows = load_results()
             self.assertEqual(len(rows), 2)
             self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
             self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
@@ -109,8 +109,8 @@ class TestLoadEvaluations(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_missing_file_returns_empty(self):
-        with patch.object(evaluate, "EVAL_LOG_PATH", "/tmp/nonexistent_eval_file.csv"):
-            rows = load_evaluations()
+        with patch.object(evaluate, "RESULTS_LOG_PATH", "/tmp/nonexistent_eval_file.csv"):
+            rows = load_results()
         self.assertEqual(rows, [])
 
     def test_value_types(self):
@@ -123,8 +123,8 @@ class TestLoadEvaluations(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            with patch.object(evaluate, "EVAL_LOG_PATH", tmp_path):
-                rows = load_evaluations()
+            with patch.object(evaluate, "RESULTS_LOG_PATH", tmp_path):
+                rows = load_results()
             row = rows[0]
             self.assertIsInstance(row["timestamp"], str)
             self.assertIsInstance(row["avg_improvement"], float)
@@ -133,6 +133,74 @@ class TestLoadEvaluations(unittest.TestCase):
             self.assertIsInstance(row["benchmark_time"], float)
         finally:
             os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# analyse_and_save
+# ---------------------------------------------------------------------------
+
+class TestAnalyseAndSave(unittest.TestCase):
+    def _write_results_csv(self, rows):
+        """Write a temporary results CSV and return its path."""
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
+        f.write("timestamp,avg_improvement,avg_loss,training_time,benchmark_time\n")
+        for r in rows:
+            f.write(f"{r['timestamp']},{r['avg_improvement']},{r['avg_loss']},"
+                    f"{r['training_time']},{r['benchmark_time']}\n")
+        f.flush()
+        f.close()
+        return f.name
+
+    def test_saves_study_row(self):
+        results_path = self._write_results_csv([
+            _row(0.0), _row(0.05), _row(0.10),
+        ])
+        output_path = tempfile.mktemp(suffix=".csv")
+        try:
+            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
+                stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+            self.assertIsNotNone(stats)
+            self.assertEqual(stats["num_trials"], 3)
+            # Verify output file
+            import csv
+            with open(output_path) as f:
+                reader = list(csv.DictReader(f))
+            self.assertEqual(len(reader), 1)
+            self.assertEqual(reader[0]["timestamp"], "2026-01-01T00:00:00")
+            self.assertEqual(set(reader[0].keys()), set(STUDY_FIELDS))
+        finally:
+            os.unlink(results_path)
+            if os.path.exists(output_path):
+                os.unlink(output_path)
+
+    def test_returns_none_with_too_few_rows(self):
+        results_path = self._write_results_csv([_row(0.0)])
+        output_path = tempfile.mktemp(suffix=".csv")
+        try:
+            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
+                stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+            self.assertIsNone(stats)
+            self.assertFalse(os.path.exists(output_path))
+        finally:
+            os.unlink(results_path)
+
+    def test_appends_multiple_studies(self):
+        results_path = self._write_results_csv([_row(0.0), _row(0.05)])
+        output_path = tempfile.mktemp(suffix=".csv")
+        try:
+            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
+                analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+                analyse_and_save(timestamp="2026-01-02T00:00:00", output_path=output_path)
+            import csv
+            with open(output_path) as f:
+                reader = list(csv.DictReader(f))
+            self.assertEqual(len(reader), 2)
+            self.assertEqual(reader[0]["timestamp"], "2026-01-01T00:00:00")
+            self.assertEqual(reader[1]["timestamp"], "2026-01-02T00:00:00")
+        finally:
+            os.unlink(results_path)
+            if os.path.exists(output_path):
+                os.unlink(output_path)
 
 
 # ---------------------------------------------------------------------------

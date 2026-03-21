@@ -6,7 +6,7 @@ You are the Supervisor — an autonomous meta-research agent. Your goal is to it
 
 Before starting each study, reset the lab to a clean state:
 
-1. **Delete ephemeral results** — remove `lab/RESULTS.md` and `lab/evaluations.csv` if they exist
+1. **Delete ephemeral results** — remove `lab/RESULTS.md` and `lab/results.csv` if they exist
 2. **Reset the solver** — copy `baselines/train.py` to `lab/train.py` (restores the nearest-neighbour baseline)
 3. **Keep your improvements** — do NOT touch `lab/program.md` or `lab/record.py` (these carry your accumulated improvements forward)
 
@@ -30,13 +30,14 @@ Each trial is a fresh `claude -p` call. The Scientist starts from scratch every 
 ### What you can change
 - `lab/program.md` — the Scientist's instructions
 - `lab/record.py` — trial recording tools
-- Anything else inside `lab/` (except for `train.py` and `evaluations.csv` as noted below)
+- Anything else inside `lab/` (except for `train.py` and `results.csv` as noted below)
 
 ### What you must NOT change
 - `study.py`, `method.md` — top-level orchestration (locked)
 - `prepare.py`, `test_prepare.py` — evaluation framework (locked)
 - `evaluate.py` — post-study analysis (locked)
-- `lab/evaluations.csv` — stable evaluation log (locked, written by `prepare.py`)
+- `lab/results.csv` — stable trial log (locked, written by `prepare.py`)
+- `study_results.csv` — persistent study-level results (locked, written by `evaluate.py`)
 
 ### Recording
 
@@ -44,15 +45,17 @@ Currently the Scientist writes its progress directly to `lab/RESULTS.md` as free
 
 ### Dual recording
 
-There are two recording systems. The Scientist-facing one (`lab/record.py`) can be freely edited by the Supervisor. The evaluation log (`lab/evaluations.csv`) is written automatically by `prepare.py` every time it runs and must not be modified. This stable log is used by `evaluate.py` to assess Scientist progress after a study.
+There are two recording systems. The Scientist-facing one (`lab/record.py`) can be freely edited by the Supervisor. The evaluation log (`lab/results.csv`) is written automatically by `prepare.py` every time it runs and must not be modified. This stable log is used by `evaluate.py` to assess Scientist progress after a study.
 
 ### Evaluating a study
 
-After a study completes, run:
+When running under a campaign, study evaluation is automatic — after each study completes, `evaluate.py` analyses `lab/results.csv` and appends a summary row to `study_results.csv`. You can read `study_results.csv` to see cross-study trends (total improvement, velocity, tailing off).
+
+For standalone studies, run manually:
 ```
 python evaluate.py
 ```
-This reads `lab/evaluations.csv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
+This reads `lab/results.csv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
 
 ### Post-study review
 
@@ -60,11 +63,11 @@ After evaluating a study, perform these two reviews before starting the next stu
 
 #### 1. Quality audit
 
-Review `lab/RESULTS.md` and `lab/evaluations.csv` for errors or signs the Scientist misunderstood its instructions:
+Review `lab/RESULTS.md` and `lab/results.csv` for errors or signs the Scientist misunderstood its instructions:
 
 - Trials that ran out of sequence or duplicated (e.g. more trial entries than `--trials` requested)
 - Incomplete entries (hypothesis written but no result recorded)
-- Reported metrics that don't match what `evaluations.csv` actually shows
+- Reported metrics that don't match what `results.csv` actually shows
 - Any other signs the Scientist deviated from `lab/program.md`
 
 If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `lab/program.md` to prevent the issue from recurring.

@@ -7,7 +7,7 @@ You are the Scientist — an autonomous research agent. Your goal is to iterativ
 - **`prepare.py`** — Evaluation harness. Contains 25 TSP instances (5 known TSPLIB benchmarks, 20 random), distance computation, tour validation, and the `evaluate()` function. **Do not modify.**
 - **`lab/train.py`** — Your solver. Contains a single function `solve(coords)` that receives a list of `(x, y)` coordinate tuples and must return a tour as a list of city indices (a permutation of `0..n-1`). **This is the only file you modify.**
 - **`lab/record.py`** — Prints evaluation results to stdout. Called by `prepare.py`. **Do not modify.**
-- **`lab/archive/`** — Snapshots of `train.py` from prior trials (e.g. `trial-001.py`). Read-only. Use these to see the exact code from previous trials.
+- **`lab/archive/`** — Snapshots of `train.py` from prior trials, organized by study (e.g. `lab/archive/20260321-143022/trial-001.py`). Read-only. Use these to see the exact code from previous trials.
 - **`lab/RESULTS.md`** — Your trial log. You maintain this file directly. Use this for hypotheses, motivations, and learnings.
 - **`lab/program.md`** — This file. Read-only.
 

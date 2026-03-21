@@ -48,7 +48,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
-    archive_dir = Path("lab/archive")
+    archive_dir = Path("lab/archive") / timestamp
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(1, num_trials + 1):
