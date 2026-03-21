@@ -1,6 +1,6 @@
 # Ideas
 
-## Supervisor strategies
+## TBD
 
 - Memory scratchpad
   - Give the Scientist a `MEMORY.md` to persist thinking across trials, beyond the formalised `record.py`
@@ -38,6 +38,17 @@
 - Search at scale
   - How to deal with massive numbers of trials — **what search strategies work best?**
 
+## Bangers
+
+*(strategies that reliably work — note why)*
+
+## Promising
+
+*(showed potential but need refinement — note what to tweak)*
+
+## Killed
+
+*(tried and failed, or logically flawed — note why to avoid re-testing)*
 
 ## Open questions
 
