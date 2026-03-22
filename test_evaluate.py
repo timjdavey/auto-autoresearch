@@ -89,14 +89,14 @@ class TestAnalyse(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestLoadResults(unittest.TestCase):
-    def test_load_valid_csv(self):
-        csv_content = (
-            "timestamp,avg_improvement,avg_loss,training_time,benchmark_time\n"
-            "2026-01-01T00:00:00,0.05,0.1,1.0,0.5\n"
-            "2026-01-01T00:01:00,0.10,0.08,2.0,0.6\n"
+    def test_load_valid_tsv(self):
+        tsv_content = (
+            "timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n"
+            "2026-01-01T00:00:00\t0.05\t0.1\t1.0\t0.5\n"
+            "2026-01-01T00:01:00\t0.10\t0.08\t2.0\t0.6\n"
         )
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            f.write(csv_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write(tsv_content)
             f.flush()
             tmp_path = f.name
         try:
@@ -109,17 +109,17 @@ class TestLoadResults(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_missing_file_returns_empty(self):
-        with patch.object(evaluate, "RESULTS_LOG_PATH", "/tmp/nonexistent_eval_file.csv"):
+        with patch.object(evaluate, "RESULTS_LOG_PATH", "/tmp/nonexistent_eval_file.tsv"):
             rows = load_results()
         self.assertEqual(rows, [])
 
     def test_value_types(self):
-        csv_content = (
-            "timestamp,avg_improvement,avg_loss,training_time,benchmark_time\n"
-            "2026-03-20T17:26:16,0.129949,0.032781,0.928,0.159\n"
+        tsv_content = (
+            "timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n"
+            "2026-03-20T17:26:16\t0.129949\t0.032781\t0.928\t0.159\n"
         )
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            f.write(csv_content)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write(tsv_content)
             f.flush()
             tmp_path = f.name
         try:
@@ -140,19 +140,19 @@ class TestLoadResults(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestAnalyseAndSave(unittest.TestCase):
-    def _write_results_csv(self, rows):
-        """Write a temporary results CSV and return its path."""
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
-        f.write("timestamp,avg_improvement,avg_loss,training_time,benchmark_time\n")
+    def _write_results_tsv(self, rows):
+        """Write a temporary results TSV and return its path."""
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False)
+        f.write("timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n")
         for r in rows:
-            f.write(f"{r['timestamp']},{r['avg_improvement']},{r['avg_loss']},"
-                    f"{r['training_time']},{r['benchmark_time']}\n")
+            f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['avg_loss']}\t"
+                    f"{r['training_time']}\t{r['benchmark_time']}\n")
         f.flush()
         f.close()
         return f.name
 
     def test_saves_study_row(self):
-        results_path = self._write_results_csv([
+        results_path = self._write_results_tsv([
             _row(0.0), _row(0.05), _row(0.10),
         ])
         output_path = tempfile.mktemp(suffix=".csv")
@@ -174,7 +174,7 @@ class TestAnalyseAndSave(unittest.TestCase):
                 os.unlink(output_path)
 
     def test_returns_none_with_too_few_rows(self):
-        results_path = self._write_results_csv([_row(0.0)])
+        results_path = self._write_results_tsv([_row(0.0)])
         output_path = tempfile.mktemp(suffix=".csv")
         try:
             with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
@@ -185,7 +185,7 @@ class TestAnalyseAndSave(unittest.TestCase):
             os.unlink(results_path)
 
     def test_appends_multiple_studies(self):
-        results_path = self._write_results_csv([_row(0.0), _row(0.05)])
+        results_path = self._write_results_tsv([_row(0.0), _row(0.05)])
         output_path = tempfile.mktemp(suffix=".csv")
         try:
             with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):

@@ -14,7 +14,7 @@ There are two layers.
 |------|-----------|
 | **Supervisor** | The outer agent. Meta-optimizer that tunes `lab/` and `program.md` |
 | **Scientist** | The inner agent. Modifies `train.py` to improve the TSP solver |
-| **Trial** | One plan-run-reflect cycle: a single hypothesis, implementation, evaluation and reflection |
+| **Trial** | One experiment cycle: edit the solver, evaluate, keep or revert |
 | **Study** | A full series of trials in one invocation of the Scientist |
 | **Campaign** | A series of iteratively improving studies, executed by the Supervisor |
 
@@ -22,7 +22,6 @@ There are two layers.
 ## Project structure
 
 * `lab/train.py` contains a `solve` function which the **Scientist** edits.
-* `lab/record.py` tools to record how the hypotheses, learnings and results are stored. This is edited by the **Supervisor**.
 * `lab/program.md` instructions for the **Scientist** to follow. This is edited by the **Supervisor**.
 * `lab` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
 * `prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**. Placed outside of lab to avoid confusion.

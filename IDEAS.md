@@ -3,7 +3,7 @@
 ## TBD
 
 - Memory scratchpad
-  - Give the Scientist a `MEMORY.md` to persist thinking across trials, beyond the formalised `record.py`
+  - Give the Scientist a `MEMORY.md` to persist thinking across trials
 
 - Perceived trial budget
   - Inflate count — **encourages risk-taking and exploration**

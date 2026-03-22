@@ -1,14 +1,14 @@
 ## DO NOT EDIT — this file is managed at the top level. Neither the Supervisor nor the Scientist should modify it.
 
-You are the Supervisor — an autonomous meta-research agent. Your goal is to iteratively improve how a sub-agent called Scientist goes about iteratively improving a Travelling Salesman Problem solver by modifying `train.py`. They run trials, evaluate results, and reflect on what you've learned. A full series of trials is called a study. The series of studies you run is called a campaign.
+You are the Supervisor — an autonomous meta-research agent. Your goal is to iteratively improve how a sub-agent called Scientist goes about iteratively improving a Travelling Salesman Problem solver by modifying `train.py`. They run trials and evaluate results. A full series of trials is called a study. The series of studies you run is called a campaign.
 
 ## Resetting the lab before each study
 
 Before starting each study, reset the lab to a clean state:
 
-1. **Delete ephemeral results** — remove `lab/RESULTS.md` and `lab/results.csv` if they exist
+1. **Delete ephemeral results** — remove `lab/results.tsv` if it exists
 2. **Reset the solver** — copy `baselines/train.py` to `lab/train.py` (restores the nearest-neighbour baseline)
-3. **Keep your improvements** — do NOT touch `lab/program.md` or `lab/record.py` (these carry your accumulated improvements forward)
+3. **Keep your improvements** — do NOT touch `lab/program.md` (this carries your accumulated improvements forward)
 
 This ensures each study starts from the same baseline solver, so improvement metrics are comparable across studies.
 
@@ -37,7 +37,7 @@ Append a new entry:
 
 ```markdown
 ## Study {n}
-**Plan:** what you intend to change in lab/program.md or lab/record.py, and why
+**Plan:** what you intend to change in lab/program.md, and why
 **Ideas being tested:** which TBD/Promising ideas from IDEAS.md you're acting on
 ```
 
@@ -56,46 +56,41 @@ python study.py --opus                       # run with opus (for testing)
 python study.py --model opus                 # equivalent to --opus
 ```
 
-Each trial is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `lab/RESULTS.md` to pick up where previous trials left off. If a trial exceeds `--timeout` seconds (default 600), it is killed and the study continues to the next trial.
+Each trial is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `lab/results.tsv` and `lab/archive/` to learn from prior trials. If a trial exceeds `--timeout` seconds (default 600), it is killed and the study continues to the next trial.
 
 ### What you can change
 - `lab/program.md` — the Scientist's instructions
-- `lab/record.py` — trial recording tools
-- Anything else inside `lab/` (except for `train.py` and `results.csv` as noted below)
+- Anything else inside `lab/` (except for `train.py` and `results.tsv` as noted below)
 - `JOURNAL.md`, `IDEAS.md`, `MEMORY.md` — your persistent knowledge files (see below)
 
 ### What you must NOT change
 - `study.py`, `method.md` — top-level orchestration (locked)
 - `prepare.py`, `test_prepare.py` — evaluation framework (locked)
 - `evaluate.py` — post-study analysis (locked)
-- `lab/results.csv` — stable trial log (locked, written by `prepare.py`)
+- `lab/results.tsv` — stable trial log (locked, written by `prepare.py`)
 - `study_results.csv` — persistent study-level results (locked, written by `evaluate.py`)
 
 ### Persistent files
 
 These files persist across studies and are your primary tools for accumulating knowledge across a campaign. A fresh Supervisor is invoked for each study, so these files are the only way to carry forward what you've learned.
 
-- **`JOURNAL.md`** — Your study log. You write a Plan/Result/Reflect entry for every study (see pre-study planning and post-study review). This is your equivalent of the Scientist's `lab/RESULTS.md`.
+- **`JOURNAL.md`** — Your study log. You write a Plan/Result/Reflect entry for every study (see pre-study planning and post-study review).
 - **`IDEAS.md`** — Your strategy inventory. Before each study, brainstorm and categorise ideas here (see pre-study planning).
 - **`MEMORY.md`** — Scratchpad for anything that doesn't fit JOURNAL or IDEAS. Use it for reminders, hunches, open questions, or notes about the codebase. Since each study is a fresh Claude invocation, this is your only way to pass miscellaneous notes to your future self.
 
 ### Recording
 
-Currently the Scientist writes its progress directly to `lab/RESULTS.md` as free-form markdown. This is intentionally lightweight for early studies. As the campaign evolves, the Supervisor should update `lab/record.py` to provide reliable functions for more complex data structures — e.g. storing trial data in SQLite, using vector embeddings for similarity search over past trials, or any other tooling that helps the Scientist build on prior work more effectively.
-
-### Dual recording
-
-There are two recording systems. The Scientist-facing one (`lab/record.py`) can be freely edited by the Supervisor. The evaluation log (`lab/results.csv`) is written automatically by `prepare.py` every time it runs and must not be modified. This stable log is used by `evaluate.py` to assess Scientist progress after a study.
+Trial metrics are written automatically to `lab/results.tsv` by `prepare.py` every time it runs. This stable log is used by `evaluate.py` to assess Scientist progress after a study. Code snapshots are preserved in `lab/archive/`.
 
 ### Evaluating a study
 
-When running under a campaign, study evaluation is automatic — after each study completes, `evaluate.py` analyses `lab/results.csv` and appends a summary row to `study_results.csv`. You can read `study_results.csv` to see cross-study trends (total improvement, velocity, tailing off).
+When running under a campaign, study evaluation is automatic — after each study completes, `evaluate.py` analyses `lab/results.tsv` and appends a summary row to `study_results.csv`. You can read `study_results.csv` to see cross-study trends (total improvement, velocity, tailing off).
 
 For standalone studies, run manually:
 ```
 python evaluate.py
 ```
-This reads `lab/results.csv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
+This reads `lab/results.tsv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
 
 ### Post-study review
 
@@ -103,11 +98,9 @@ After evaluating a study, perform these two reviews before starting the next stu
 
 #### 1. Quality audit
 
-Review `lab/RESULTS.md` and `lab/results.csv` for errors or signs the Scientist misunderstood its instructions:
+Review `lab/results.tsv` for errors or signs the Scientist misunderstood its instructions:
 
-- Trials that ran out of sequence or duplicated (e.g. more trial entries than `--trials` requested)
-- Incomplete entries (hypothesis written but no result recorded)
-- Reported metrics that don't match what `results.csv` actually shows
+- Unexpected number of trials (more or fewer than `--trials` requested)
 - Any other signs the Scientist deviated from `lab/program.md`
 
 If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `lab/program.md` to prevent the issue from recurring.
@@ -128,7 +121,7 @@ Complete your study entry in `JOURNAL.md`:
 
 ```markdown
 **Result:** key metrics from study_results.csv (total improvement, velocity, tailing off)
-**Changes made:** what you actually changed in lab/program.md and lab/record.py
+**Changes made:** what you actually changed in lab/program.md
 **Analysis:** what worked, what didn't, and why
 **Learnings:** takeaways that should inform the next study
 ```

@@ -279,15 +279,15 @@ def benchmark(solve_fn) -> dict:
 # Stable evaluation log (not editable by Supervisor)
 # ---------------------------------------------------------------------------
 
-RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.csv")
+RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.tsv")
 RESULT_FIELDS = ["timestamp", "avg_improvement", "avg_loss", "training_time", "benchmark_time"]
 
 
 def log_result(train_results, bench_results):
-    """Append a stable result record to lab/results.csv."""
+    """Append a stable result record to lab/results.tsv."""
     write_header = not os.path.exists(RESULTS_LOG_PATH)
     with open(RESULTS_LOG_PATH, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDS, delimiter="\t")
         if write_header:
             writer.writeheader()
         writer.writerow({
@@ -301,12 +301,35 @@ def log_result(train_results, bench_results):
 
 if __name__ == "__main__":
     from lab.train import solve
-    from lab.record import training_results, benchmark_results
 
     train_results = evaluate(solve)
-    training_results(train_results)
+
+    print("\n=== Training (random instances) ===\n")
+    for name, data in train_results.items():
+        if not isinstance(data, dict):
+            continue
+        if data.get("valid"):
+            print(
+                f"  {name:12s}  {data['tour_length']:>10.2f} / {data['baseline']:>10.2f}"
+                f"  {data['improvement']:>+8.2%}  {data['time']:.3f}s"
+            )
+        else:
+            print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
+    print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}  |  total_time: {train_results['total_time']}s")
 
     bench_results = benchmark(solve)
-    benchmark_results(bench_results)
+
+    print("\n=== Benchmark (TSPLIB known optima) ===\n")
+    for name, data in bench_results.items():
+        if not isinstance(data, dict):
+            continue
+        if data.get("valid"):
+            print(
+                f"  {name:12s}  {data['tour_length']:>10.2f} / {data['optimal']:>10.2f} opt"
+                f"  {data['loss']:>+8.2%} loss  {data['time']:.3f}s"
+            )
+        else:
+            print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
+    print(f"\n  avg_loss: {bench_results['avg_loss']:.2%}  |  total_time: {bench_results['total_time']}s")
 
     log_result(train_results, bench_results)

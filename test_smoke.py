@@ -1,15 +1,12 @@
 """Smoke test — end-to-end data pipeline without Claude invocation.
 
-Runs the full chain: solver -> evaluate -> record -> analyse.
+Runs the full chain: solver -> evaluate -> analyse.
 Verifies the entire pipeline produces valid output without crashing.
 """
 
-import io
 import unittest
-from contextlib import redirect_stdout
 
 from evaluate import analyse
-from lab.record import benchmark_results, training_results
 from lab.train import solve
 from prepare import benchmark, evaluate
 
@@ -25,15 +22,7 @@ class TestEndToEndPipeline(unittest.TestCase):
         self.assertIn("avg_loss", bench_results)
         self.assertIn("total_time", bench_results)
 
-        # 2. Pass through record formatting (should not crash)
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            training_results(train_results)
-            benchmark_results(bench_results)
-        output = buf.getvalue()
-        self.assertTrue(len(output) > 0)
-
-        # 3. Build evaluation rows and run through analyse
+        # 2. Build evaluation rows and run through analyse
         rows = [
             {
                 "timestamp": "2026-01-01T00:00:00",

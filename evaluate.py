@@ -1,6 +1,6 @@
 """
 evaluate.py — Analyse Scientist progress after a study completes.
-Reads the stable log at lab/results.csv (written by prepare.py).
+Reads the stable log at lab/results.tsv (written by prepare.py).
 
 Usage:
     python evaluate.py
@@ -11,16 +11,16 @@ import os
 import sys
 from datetime import datetime
 
-RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.csv")
+RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.tsv")
 
 
 def load_results():
-    """Load all rows from results.csv, returning list of dicts with floats."""
+    """Load all rows from results.tsv, returning list of dicts with floats."""
     if not os.path.exists(RESULTS_LOG_PATH):
         return []
     with open(RESULTS_LOG_PATH, newline="") as f:
         rows = []
-        for row in csv.DictReader(f):
+        for row in csv.DictReader(f, delimiter="\t"):
             rows.append({
                 "timestamp": row["timestamp"],
                 "avg_improvement": float(row["avg_improvement"]),

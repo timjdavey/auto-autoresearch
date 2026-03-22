@@ -62,8 +62,7 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
         )
 
         # Delete ephemeral files
-        Path("lab/results.csv").unlink(missing_ok=True)
-        Path("lab/RESULTS.md").unlink(missing_ok=True)
+        Path("lab/results.tsv").unlink(missing_ok=True)
 
         # Run the Supervisor
         log_dir = Path("logs") / study_timestamp
