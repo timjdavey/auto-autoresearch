@@ -4,15 +4,15 @@ Autoresearching autoresearch. Let's optimise how an LLM does autoresearch! It's 
 ## How it works
 
 There are two layers.
-* inner loop: a **Scientist** agent edits `train.py` like the standard autoresearch cycle. Runs trials.
-* outer loop: a **Supervisor** meta-researcher optimises `program.md` and related tools in the `lab/` folder to improve how the Scientist runs its studies.
+* inner loop: a **Scientist** agent edits `scientist/train.py` like the standard autoresearch cycle. Runs trials.
+* outer loop: a **Supervisor** meta-researcher optimises `scientist/program.md` and related tools in the `scientist/` folder to improve how the Scientist runs its studies.
 
 
 ## Taxonomy
 
 | Term | Definition |
 |------|-----------|
-| **Supervisor** | The outer agent. Meta-optimizer that tunes `lab/` and `program.md` |
+| **Supervisor** | The outer agent. Meta-optimizer that tunes `scientist/` and `scientist/program.md` |
 | **Scientist** | The inner agent. Modifies `train.py` to improve the TSP solver |
 | **Trial** | One experiment cycle: edit the solver, evaluate, keep or revert |
 | **Study** | A full series of trials in one invocation of the Scientist |
@@ -21,24 +21,24 @@ There are two layers.
 
 ## Project structure
 
-* `lab/train.py` contains a `solve` function which the **Scientist** edits.
-* `lab/program.md` instructions for the **Scientist** to follow. This is edited by the **Supervisor**.
-* `lab` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
-* `prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**. Placed outside of lab to avoid confusion.
-* `method.md` instructions for the **Supervisor** to follow. **Not modified by Supervisor or Scientist.**
-* `study.py` runs a study. Supports `--trials N` (default 100) and `--timeout S` (default 600s per trial). **Not modified by Supervisor or Scientist.**
+* `scientist/train.py` contains a `solve` function which the **Scientist** edits.
+* `scientist/program.md` instructions for the **Scientist** to follow. This is edited by the **Supervisor**.
+* `scientist/` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
+* `scientist/prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**.
+* `supervisor/method.md` instructions for the **Supervisor** to follow. **Not modified by Supervisor or Scientist.**
+* `supervisor/study.py` runs a study. Supports `--trials N` (default 100) and `--timeout S` (default 600s per trial). **Not modified by Supervisor or Scientist.**
 
 
 ## Quick test
 
 To verify everything is working, run a short study (1 trial, sonnet by default):
 ```
-python study.py --trials 1
+python supervisor/study.py --trials 1
 ```
 
 To test with opus:
 ```
-python study.py --trials 1 --opus
+python supervisor/study.py --trials 1 --opus
 ```
 
 

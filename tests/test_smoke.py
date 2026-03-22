@@ -6,9 +6,9 @@ Verifies the entire pipeline produces valid output without crashing.
 
 import unittest
 
-from evaluate import analyse
-from lab.train import solve
-from prepare import benchmark, evaluate
+from supervisor.evaluate import analyse
+from scientist.train import solve
+from scientist.prepare import benchmark, evaluate
 
 
 class TestEndToEndPipeline(unittest.TestCase):

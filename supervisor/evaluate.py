@@ -1,6 +1,6 @@
 """
 evaluate.py — Analyse Scientist progress after a study completes.
-Reads the stable log at lab/results.tsv (written by prepare.py).
+Reads the stable log at scientist/results.tsv (written by prepare.py).
 
 Usage:
     python evaluate.py
@@ -11,7 +11,7 @@ import os
 import sys
 from datetime import datetime
 
-RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.tsv")
+RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "scientist", "results.tsv")
 
 
 def load_results():

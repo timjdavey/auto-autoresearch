@@ -7,8 +7,8 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-import evaluate
-from evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
+import supervisor.evaluate as evaluate
+from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
 
 
 def _row(avg_improvement, avg_loss=0.1, training_time=1.0, benchmark_time=0.5):

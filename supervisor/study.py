@@ -24,7 +24,7 @@ DEFAULT_MODEL = "sonnet"
 DEFAULT_TRIALS = 100
 DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
-SCIENTIST_PROMPT = "Read and follow lab/program.md"
+SCIENTIST_PROMPT = "Read and follow scientist/program.md"
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
@@ -44,14 +44,14 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
-    archive_dir = Path("lab/archive") / timestamp
+    archive_dir = Path("scientist/archive") / timestamp
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(1, num_trials + 1):
         print(f"=== Trial {i} / {num_trials} ===", file=sys.stderr)
 
         # Archive train.py before Scientist modifies it
-        shutil.copy("lab/train.py", archive_dir / f"trial-{i:03d}.py")
+        shutil.copy("scientist/train.py", archive_dir / f"trial-{i:03d}.py")
 
         log_file = log_dir / f"trial-{i:03d}.jsonl"
         try:

@@ -24,7 +24,7 @@ DEFAULT_MODEL = "opus"
 DEFAULT_STUDIES = 5
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
 ALLOWED_TOOLS = "Read,Edit,Write,Bash"
-SUPERVISOR_PROMPT = "Read and follow method.md"
+SUPERVISOR_PROMPT = "Read and follow supervisor/method.md"
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
@@ -32,7 +32,7 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
     """Run a campaign of sequential studies."""
-    from evaluate import analyse_and_save
+    from supervisor.evaluate import analyse_and_save
 
     claude_cmd = [
         "claude", "-p",
@@ -48,11 +48,11 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
 
         # Archive current lab state
         archive_dir = Path("archive") / study_timestamp
-        shutil.copytree("lab", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
-        print(f"  Archived lab/ → {archive_dir}", file=sys.stderr)
+        shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
+        print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
 
         # Reset train.py to baseline
-        shutil.copy("baselines/train.py", "lab/train.py")
+        shutil.copy("scientist/baselines/train.py", "scientist/train.py")
 
         # Git commit current state
         subprocess.run(["git", "add", "-A"], check=False)
@@ -62,7 +62,7 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
         )
 
         # Delete ephemeral files
-        Path("lab/results.tsv").unlink(missing_ok=True)
+        Path("scientist/results.tsv").unlink(missing_ok=True)
 
         # Run the Supervisor
         log_dir = Path("logs") / study_timestamp

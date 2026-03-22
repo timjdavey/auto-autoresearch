@@ -279,15 +279,15 @@ def benchmark(solve_fn) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Stable evaluation log (not editable by Supervisor)
+# Stable evaluation log (scientist/results.tsv — not editable by Supervisor)
 # ---------------------------------------------------------------------------
 
-RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.tsv")
+RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 RESULT_FIELDS = ["timestamp", "avg_improvement", "training_time"]
 
 
 def log_result(train_results):
-    """Append a stable result record to lab/results.tsv."""
+    """Append a stable result record to scientist/results.tsv."""
     write_header = not os.path.exists(RESULTS_LOG_PATH)
     with open(RESULTS_LOG_PATH, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=RESULT_FIELDS, delimiter="\t")
@@ -301,7 +301,7 @@ def log_result(train_results):
 
 
 if __name__ == "__main__":
-    from lab.train import solve
+    from scientist.train import solve
 
     train_results = evaluate(solve)
 

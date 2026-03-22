@@ -6,9 +6,9 @@ You are the Supervisor — an autonomous meta-research agent. Your goal is to it
 
 Before starting each study, reset the lab to a clean state:
 
-1. **Delete ephemeral results** — remove `lab/results.tsv` if it exists
-2. **Reset the solver** — copy `baselines/train.py` to `lab/train.py` (restores the nearest-neighbour baseline)
-3. **Keep your improvements** — do NOT touch `lab/program.md` (this carries your accumulated improvements forward)
+1. **Delete ephemeral results** — remove `scientist/results.tsv` if it exists
+2. **Reset the solver** — copy `scientist/baselines/train.py` to `scientist/train.py` (restores the nearest-neighbour baseline)
+3. **Keep your improvements** — do NOT touch `scientist/program.md` (this carries your accumulated improvements forward)
 
 This ensures each study starts from the same baseline solver, so improvement metrics are comparable across studies.
 
@@ -37,7 +37,7 @@ Append a new entry:
 
 ```markdown
 ## Study {n}
-**Plan:** what you intend to change in lab/program.md, and why
+**Plan:** what you intend to change in scientist/program.md, and why
 **Ideas being tested:** which TBD/Promising ideas from IDEAS.md you're acting on
 ```
 
@@ -45,30 +45,30 @@ Then proceed to reset the lab and run the study.
 
 ## Running a study
 
-A single script `study.py` invokes the Scientist with the following prompt `Read and follow lab/program.md`
+A single script `supervisor/study.py` invokes the Scientist with the following prompt `Read and follow scientist/program.md`
 
-### `study.py`
+### `supervisor/study.py`
 ```
-python study.py                              # 100 trials, sonnet (default)
-python study.py --trials 5                   # 5 fresh-context trials
-python study.py --timeout 300                # 5-minute per-trial timeout
-python study.py --opus                       # run with opus (for testing)
-python study.py --model opus                 # equivalent to --opus
+python supervisor/study.py                              # 100 trials, sonnet (default)
+python supervisor/study.py --trials 5                   # 5 fresh-context trials
+python supervisor/study.py --timeout 300                # 5-minute per-trial timeout
+python supervisor/study.py --opus                       # run with opus (for testing)
+python supervisor/study.py --model opus                 # equivalent to --opus
 ```
 
-Each trial is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `lab/results.tsv` and `lab/archive/` to learn from prior trials. If a trial exceeds `--timeout` seconds (default 600), it is killed and the study continues to the next trial.
+Each trial is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `scientist/results.tsv` and `scientist/archive/` to learn from prior trials. If a trial exceeds `--timeout` seconds (default 600), it is killed and the study continues to the next trial.
 
 ### What you can change
-- `lab/program.md` — the Scientist's instructions
-- Anything else inside `lab/` (except for `train.py` and `results.tsv` as noted below)
+- `scientist/program.md` — the Scientist's instructions
+- Anything else inside `scientist/` (except for `train.py` and `results.tsv` as noted below)
 - `JOURNAL.md`, `IDEAS.md`, `MEMORY.md` — your persistent knowledge files (see below)
 
 ### What you must NOT change
-- `study.py`, `method.md` — top-level orchestration (locked)
-- `prepare.py`, `test_prepare.py` — evaluation framework (locked)
-- `evaluate.py` — post-study analysis (locked)
-- `lab/results.tsv` — stable trial log (locked, written by `prepare.py`)
-- `study_results.csv` — persistent study-level results (locked, written by `evaluate.py`)
+- `supervisor/study.py`, `supervisor/method.md` — top-level orchestration (locked)
+- `scientist/prepare.py`, `tests/test_prepare.py` — evaluation framework (locked)
+- `supervisor/evaluate.py` — post-study analysis (locked)
+- `scientist/results.tsv` — stable trial log (locked, written by `scientist/prepare.py`)
+- `supervisor/study_results.csv` — persistent study-level results (locked, written by `supervisor/evaluate.py`)
 
 ### Persistent files
 
@@ -80,17 +80,17 @@ These files persist across studies and are your primary tools for accumulating k
 
 ### Recording
 
-Trial metrics are written automatically to `lab/results.tsv` by `prepare.py` every time it runs. This stable log is used by `evaluate.py` to assess Scientist progress after a study. Code snapshots are preserved in `lab/archive/`.
+Trial metrics are written automatically to `scientist/results.tsv` by `scientist/prepare.py` every time it runs. This stable log is used by `supervisor/evaluate.py` to assess Scientist progress after a study. Code snapshots are preserved in `scientist/archive/`.
 
 ### Evaluating a study
 
-When running under a campaign, study evaluation is automatic — after each study completes, `evaluate.py` analyses `lab/results.tsv` and appends a summary row to `study_results.csv`. You can read `study_results.csv` to see cross-study trends (total improvement, velocity, tailing off).
+When running under a campaign, study evaluation is automatic — after each study completes, `supervisor/evaluate.py` analyses `scientist/results.tsv` and appends a summary row to `supervisor/study_results.csv`. You can read `supervisor/study_results.csv` to see cross-study trends (total improvement, velocity, tailing off).
 
 For standalone studies, run manually:
 ```
-python evaluate.py
+python supervisor/evaluate.py
 ```
-This reads `lab/results.tsv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
+This reads `scientist/results.tsv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off).
 
 ### Post-study review
 
@@ -98,30 +98,30 @@ After evaluating a study, perform these two reviews before starting the next stu
 
 #### 1. Quality audit
 
-Review `lab/results.tsv` for errors or signs the Scientist misunderstood its instructions:
+Review `scientist/results.tsv` for errors or signs the Scientist misunderstood its instructions:
 
 - Unexpected number of trials (more or fewer than `--trials` requested)
-- Any other signs the Scientist deviated from `lab/program.md`
+- Any other signs the Scientist deviated from `scientist/program.md`
 
-If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `lab/program.md` to prevent the issue from recurring.
+If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `scientist/program.md` to prevent the issue from recurring.
 
 #### 2. Tooling & technique review
 
-Review `lab/train.py` and the evaluation results to assess whether the Scientist is making effective use of the tools and time budget available to it:
+Review `scientist/train.py` and the evaluation results to assess whether the Scientist is making effective use of the tools and time budget available to it:
 
 - Is it using the available packages (`numpy`, `scipy`, `numba`)? These can dramatically speed up inner loops and unlock more computation within the time budget.
 - Is it using the 30-second per-instance time budget effectively, or finishing in milliseconds?
 - Are there obvious algorithmic approaches it hasn't tried that the results suggest would help?
 
-If the Scientist is underutilising available tools or techniques, update `lab/program.md` to better guide it — e.g. add stronger encouragement to use specific packages, suggest concrete techniques, or reorder the research strategy guidance to prioritise underexplored approaches.
+If the Scientist is underutilising available tools or techniques, update `scientist/program.md` to better guide it — e.g. add stronger encouragement to use specific packages, suggest concrete techniques, or reorder the research strategy guidance to prioritise underexplored approaches.
 
 #### 3. Study reflection in JOURNAL.md
 
 Complete your study entry in `JOURNAL.md`:
 
 ```markdown
-**Result:** key metrics from study_results.csv (total improvement, velocity, tailing off)
-**Changes made:** what you actually changed in lab/program.md
+**Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off)
+**Changes made:** what you actually changed in scientist/program.md
 **Analysis:** what worked, what didn't, and why
 **Learnings:** takeaways that should inform the next study
 ```

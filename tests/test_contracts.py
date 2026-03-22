@@ -1,21 +1,21 @@
-"""Tests for lab/train.py — solver interface contract validation.
+"""Tests for scientist/train.py — solver interface contract validation.
 
-Validates that whatever the Scientist has produced in lab/train.py
+Validates that whatever the Scientist has produced in scientist/train.py
 still satisfies the interface that prepare.py expects. Useful as a
 pre-study sanity check or CI gate.
 """
 
 import unittest
 
-from prepare import TRAIN_INSTANCES, _generate_random_instance, validate_tour
+from scientist.prepare import TRAIN_INSTANCES, _generate_random_instance, validate_tour
 
 
 def _get_solve():
     """Import solve fresh to pick up whatever the Scientist wrote."""
     import importlib
-    import lab.train
-    importlib.reload(lab.train)
-    return lab.train.solve
+    import scientist.train
+    importlib.reload(scientist.train)
+    return scientist.train.solve
 
 
 _solve = _get_solve()
