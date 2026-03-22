@@ -20,6 +20,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from supervisor.evaluate import analyse_and_save
+
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TRIALS = 100
 DEFAULT_TIMEOUT = 300
@@ -67,6 +69,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         except subprocess.TimeoutExpired:
             print(f"=== Trial {i} timed out after {trial_timeout}s, skipping ===", file=sys.stderr)
 
+    analyse_and_save(timestamp=timestamp)
     return log_dir
 
 

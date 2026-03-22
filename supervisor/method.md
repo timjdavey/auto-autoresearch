@@ -18,28 +18,18 @@ Before running each study, review your accumulated knowledge and plan your appro
 
 ### 1. Read your history
 
-Read `JOURNAL.md`, `IDEAS.md`, `MEMORY.md`, and `study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed.
+Read `JOURNAL.md` and `study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed.
 
-### 2. Update IDEAS.md
+### 2. Update JOURNAL.md
 
-Brainstorm strategy ideas and categorise every idea into one of four buckets:
-
-- **TBD** — not yet tested, worth trying
-- **Bangers** — strategies that reliably work (note *why* they work)
-- **Promising** — showed potential but need refinement (note what to tweak)
-- **Killed** — tried and failed, or logically flawed (note *why* to avoid re-testing)
-
-Move ideas between categories based on the latest study results. Add new ideas inspired by what you learned. Remove nothing — killed ideas are valuable negative results.
-
-### 3. Write the study plan in JOURNAL.md
-
-Append a new entry:
+Update your journal with new ideas, reflections, and a study plan. Append a new study entry — a starting template:
 
 ```markdown
 ## Study {n}
 **Plan:** what you intend to change in scientist/program.md, and why
-**Ideas being tested:** which TBD/Promising ideas from IDEAS.md you're acting on
 ```
+
+Also review and update your ideas for improving the scientist, and reflect on your own process. The journal's structure is yours to evolve — use whatever format helps you think clearly.
 
 Then proceed to reset the lab and run the study.
 
@@ -61,7 +51,7 @@ Each trial is a fresh `claude -p` call. The Scientist starts from scratch every 
 ### What you can change
 - `scientist/program.md` — the Scientist's instructions
 - Anything else inside `scientist/` (except for `train.py` and `results.tsv` as noted below)
-- `JOURNAL.md`, `IDEAS.md`, `MEMORY.md` — your persistent knowledge files (see below)
+- `JOURNAL.md` — your persistent journal (see below)
 
 ### What you must NOT change
 - `supervisor/study.py`, `supervisor/method.md` — top-level orchestration (locked)
@@ -72,11 +62,13 @@ Each trial is a fresh `claude -p` call. The Scientist starts from scratch every 
 
 ### Persistent files
 
-These files persist across studies and are your primary tools for accumulating knowledge across a campaign. A fresh Supervisor is invoked for each study, so these files are the only way to carry forward what you've learned.
+A fresh Supervisor is invoked for each study, so this file is your only way to carry forward what you've learned.
 
-- **`JOURNAL.md`** — Your study log. You write a Plan/Result/Reflect entry for every study (see pre-study planning and post-study review).
-- **`IDEAS.md`** — Your strategy inventory. Before each study, brainstorm and categorise ideas here (see pre-study planning).
-- **`MEMORY.md`** — Scratchpad for anything that doesn't fit JOURNAL or IDEAS. Use it for reminders, hunches, open questions, or notes about the codebase. Since each study is a fresh Claude invocation, this is your only way to pass miscellaneous notes to your future self.
+- **`JOURNAL.md`** — Your persistent journal. It serves two purposes:
+  1. **Ideas for improving the scientist** — strategies, hypotheses, and observations about how the scientist does discovery. What approaches work, what failed, what to try next.
+  2. **Self-reflection on your own process** — how you plan studies, what meta-strategies work for you as a supervisor, what you'd tell your future self.
+
+  The journal starts with a suggested structure, but you should evolve it as you learn what works. You might find structured categories helpful, prefer freeform notes, or land on a hybrid. Periodically reflect on whether the format itself is serving you well.
 
 ### Recording
 
@@ -117,19 +109,13 @@ If the Scientist is underutilising available tools or techniques, update `scient
 
 #### 3. Study reflection in JOURNAL.md
 
-Complete your study entry in `JOURNAL.md`:
+Complete your study entry in `JOURNAL.md`. You might include:
 
-```markdown
-**Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off)
-**Changes made:** what you actually changed in scientist/program.md
-**Analysis:** what worked, what didn't, and why
-**Learnings:** takeaways that should inform the next study
-```
+- **Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off)
+- **Changes made:** what you actually changed in scientist/program.md
+- **Analysis:** what worked, what didn't, and why
+- **Learnings:** takeaways that should inform the next study
+
+Also reflect on your own process as a supervisor: did your planning approach work well this study? Would you approach the next study differently? Update your ideas based on the results — what's proven, what's promising, what should be abandoned.
 
 Be honest about failures. A study that taught you something is not wasted.
-
-#### 4. Update IDEAS.md and MEMORY.md
-
-Based on the study results, re-categorise ideas in `IDEAS.md`. Move confirmed strategies to **Bangers**, partially successful ones to **Promising**, and failures to **Killed**. Add new **TBD** ideas sparked by what you observed.
-
-Write anything else worth remembering to `MEMORY.md` — quirks of the Scientist's behaviour, edge cases in the evaluation, timing observations, or reminders for the next Supervisor invocation.
