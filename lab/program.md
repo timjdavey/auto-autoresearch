@@ -12,15 +12,13 @@ You are the Scientist — an autonomous research agent. Your goal is to improve 
 
 ## Metric
 
-You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the nearest-neighbour baseline, averaged across 20 random instances (sizes 20–200 cities):
+You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the nearest-neighbour baseline, averaged across 3 representative instances (rand20a, rand75a, rand150a):
 
 ```
 improvement = (baseline_length - your_tour_length) / baseline_length
 ```
 
 A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes.
-
-There are also 5 TSPLIB benchmark instances evaluated separately as `avg_loss` (lower is better). These are for independent progress checking only — focus on avg_improvement.
 
 ## Constraints
 

@@ -22,7 +22,7 @@ from pathlib import Path
 
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TRIALS = 100
-DEFAULT_TIMEOUT = 600
+DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 SCIENTIST_PROMPT = "Read and follow lab/program.md"
 
@@ -32,10 +32,6 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL):
     """Run a study and return the log directory path."""
-    # Run prepare.py first to validate setup and record a baseline evaluation
-    print("=== Running prepare.py (validate & baseline) ===", file=sys.stderr)
-    subprocess.run([sys.executable, "prepare.py"], check=True)
-
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = Path("logs") / timestamp
     log_dir.mkdir(parents=True, exist_ok=True)

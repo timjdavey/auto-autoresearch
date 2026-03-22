@@ -106,6 +106,9 @@ TRAIN_INSTANCES = {
     "rand200b": {"coords": _generate_random_instance(200, seed=567128), "optimal": None, "known": False},
 }
 
+QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
+                   if k in ("rand20a", "rand75a", "rand150a")}
+
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 
 # ---------------------------------------------------------------------------
@@ -257,7 +260,7 @@ def evaluate(solve_fn) -> dict:
         improvement = (baseline - length) / baseline
         return improvement, {"baseline": round(baseline, 2), "improvement": improvement}
 
-    return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
+    return _evaluate_instances(QUICK_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
 
 
 def benchmark(solve_fn) -> dict:
@@ -280,10 +283,10 @@ def benchmark(solve_fn) -> dict:
 # ---------------------------------------------------------------------------
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "lab", "results.tsv")
-RESULT_FIELDS = ["timestamp", "avg_improvement", "avg_loss", "training_time", "benchmark_time"]
+RESULT_FIELDS = ["timestamp", "avg_improvement", "training_time"]
 
 
-def log_result(train_results, bench_results):
+def log_result(train_results):
     """Append a stable result record to lab/results.tsv."""
     write_header = not os.path.exists(RESULTS_LOG_PATH)
     with open(RESULTS_LOG_PATH, "a", newline="") as f:
@@ -293,9 +296,7 @@ def log_result(train_results, bench_results):
         writer.writerow({
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "avg_improvement": train_results.get("avg_improvement"),
-            "avg_loss": bench_results.get("avg_loss"),
             "training_time": train_results.get("total_time"),
-            "benchmark_time": bench_results.get("total_time"),
         })
 
 
@@ -304,7 +305,7 @@ if __name__ == "__main__":
 
     train_results = evaluate(solve)
 
-    print("\n=== Training (random instances) ===\n")
+    print("\n=== Evaluation (quick instances) ===\n")
     for name, data in train_results.items():
         if not isinstance(data, dict):
             continue
@@ -317,19 +318,4 @@ if __name__ == "__main__":
             print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
     print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}  |  total_time: {train_results['total_time']}s")
 
-    bench_results = benchmark(solve)
-
-    print("\n=== Benchmark (TSPLIB known optima) ===\n")
-    for name, data in bench_results.items():
-        if not isinstance(data, dict):
-            continue
-        if data.get("valid"):
-            print(
-                f"  {name:12s}  {data['tour_length']:>10.2f} / {data['optimal']:>10.2f} opt"
-                f"  {data['loss']:>+8.2%} loss  {data['time']:.3f}s"
-            )
-        else:
-            print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
-    print(f"\n  avg_loss: {bench_results['avg_loss']:.2%}  |  total_time: {bench_results['total_time']}s")
-
-    log_result(train_results, bench_results)
+    log_result(train_results)

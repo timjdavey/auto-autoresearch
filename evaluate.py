@@ -24,9 +24,7 @@ def load_results():
             rows.append({
                 "timestamp": row["timestamp"],
                 "avg_improvement": float(row["avg_improvement"]),
-                "avg_loss": float(row["avg_loss"]),
                 "training_time": float(row["training_time"]),
-                "benchmark_time": float(row["benchmark_time"]),
             })
     return rows
 

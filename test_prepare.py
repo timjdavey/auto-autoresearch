@@ -8,6 +8,7 @@ from prepare import (
     BENCHMARK_INSTANCES,
     INSTANCES,
     NN_BASELINES,
+    QUICK_INSTANCES,
     TIME_BUDGET,
     TRAIN_INSTANCES,
     _nn_solve,
@@ -154,7 +155,7 @@ class TestEvaluate(unittest.TestCase):
         results = evaluate(_nn_solve)
         self.assertIn("avg_improvement", results)
         self.assertAlmostEqual(results["avg_improvement"], 0.0, places=5)
-        for name in TRAIN_INSTANCES:
+        for name in QUICK_INSTANCES:
             self.assertTrue(results[name]["valid"])
 
     def test_crashing_solver(self):
@@ -163,14 +164,14 @@ class TestEvaluate(unittest.TestCase):
 
         results = evaluate(bad_solver)
         self.assertAlmostEqual(results["avg_improvement"], -10.0)
-        for name in TRAIN_INSTANCES:
+        for name in QUICK_INSTANCES:
             self.assertFalse(results[name]["valid"])
 
     def test_result_keys(self):
         results = evaluate(_nn_solve)
         self.assertIn("avg_improvement", results)
         self.assertIn("total_time", results)
-        for name in TRAIN_INSTANCES:
+        for name in QUICK_INSTANCES:
             self.assertIn(name, results)
 
 
@@ -211,6 +212,11 @@ class TestInstanceData(unittest.TestCase):
         self.assertEqual(len(TRAIN_INSTANCES), 20)
         self.assertEqual(len(BENCHMARK_INSTANCES), 5)
         self.assertEqual(len(INSTANCES), 25)
+
+    def test_quick_instances(self):
+        self.assertEqual(len(QUICK_INSTANCES), 3)
+        for name in QUICK_INSTANCES:
+            self.assertIn(name, TRAIN_INSTANCES)
 
     def test_random_instances_deterministic(self):
         from prepare import _generate_random_instance
