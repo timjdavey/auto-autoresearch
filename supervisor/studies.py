@@ -13,6 +13,7 @@
 #   uv run studies --opus                     # run with opus (for testing)
 
 import argparse
+import csv
 import os
 import shutil
 import signal
@@ -33,6 +34,24 @@ ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+
+
+RESULT_FIELDS = ["timestamp", "avg_improvement", "training_time"]
+
+
+def _log_timeout(problem_dir, trial_timeout):
+    """Append a TIMEOUT row to results.tsv so the Scientist sees what happened."""
+    results_path = problem_dir / "results.tsv"
+    write_header = not results_path.exists()
+    with open(results_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDS, delimiter="\t")
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "avg_improvement": f"TIMEOUT after {trial_timeout}s",
+            "training_time": trial_timeout,
+        })
 
 
 def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout):
@@ -67,6 +86,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
             except subprocess.TimeoutExpired:
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
+            _log_timeout(problem_dir, trial_timeout)
             return problem, trial_num, False
     if proc.returncode != 0:
         print(f"=== {problem} trial {trial_num} failed (exit code {proc.returncode}) ===", file=sys.stderr)
