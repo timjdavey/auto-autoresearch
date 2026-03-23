@@ -7,7 +7,7 @@
 # Runs an experiment: one or more Supervisor studies.
 #
 # Usage:
-#   uv run experiment                          # 5 studies, opus (default)
+#   uv run experiment                          # 20 studies, opus (default)
 #   uv run experiment --studies 3              # 3 studies
 #   uv run experiment --timeout 7200           # 2-hour per-study timeout
 #   uv run experiment --model sonnet           # use sonnet for Supervisor
@@ -23,7 +23,7 @@ from pathlib import Path
 from scientist import SCIENTIST_DIR, discover_problems
 
 DEFAULT_MODEL = "opus"
-DEFAULT_STUDIES = 5
+DEFAULT_STUDIES = 20
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
 ALLOWED_TOOLS = "Read,Edit,Write,Bash"
 SUPERVISOR_PROMPT = "Read and follow supervisor/method.md"

@@ -18,11 +18,13 @@ There are two layers to the system:
 * **Supervisor over self-reflection**. Getting the scientist to edit it's own environment can too easily lead it to game the output; or worse, poor process choices could ruin it's entire future tradjectory. So you need an outer loop to verify the modifications work.
 * **Multi-problem**. We found early on that the Supervisor wants to micro-manage and work as a Scientist, so we introduced a set of parallel Scientists working on different problems (not nanochat). This forces the Supervisor to work at a higher level. It also helps introduce a bit of replication robustness.
 * **CPU over GPU**. Since we're not directly optimising nanochat here and instead are looking for universal principals we've opted for CPU friendly problems. See below.
-* **Inner improvement only**. For the same reasons as above, we allow the Supervisor to only do a minimal amount of self-improvement via self reflection in the `/supervisor/journal.md` file.
+* **Inner improvement only**. For the same reasons as above, we allow the Supervisor to only do a minimal amount of self-improvement via self reflection in the `/supervisor/` files (journal, ideas, and reflections).
 * **Filesystem over git**. We've opted for storing previous iterations as files over git as it allows us to slightly easier manage what previous experiments are considered (as this is a multi-layered inception style system of iterations).
 * **Invocation**. Scientists are explicitly called in parallel via a CLI as this was more robust than trying to get the Supervisor to spin up multiple parallel sub-agents. Similarly we use claude here because that's our subscription, but could add codex on request.
 * **Minimal**. It's already a complex conceptual setup, so we've tried to not overengineer anything. We've only included two problems to solve for generalisation & replication, but trying to keep it at only two.
-* **Agency**. Similarly starting with just one memory file for the Supervisor and no memory files (similar to autoresearch) aims to give the Supervisor the highest agency it can explore the space on it's own. Likewise for `train.py` in the inner cycles.
+* **Human readability**. The only exception to this is breaking the learnings into three easier to consume files for the humans `ideas.md` and `reflections.md`, seperate from the `journal.md`.
+
+
 
 ## Project structure
 
@@ -34,13 +36,15 @@ supervisor/
     studies.py      - runs a round of scientist studies (human-only edit)
     evaluate.py     - evaluates a study (human-only edit)
     method.md       - the program.md for the supervisor (human-only edit)
-    journal.md      - a scratchpad of ideas and memories (supervisor views & edits)
+    journal.md      - chronological study log (supervisor views & edits)
+    ideas.md        - ideas for improving scientists processes (supervisor views & edits)
+    reflections.md  - ideas for improving supervisor processes (supervisor views & edits)
 scientist/
     guidance.md     - on how to run the scientific process (viewed by all scientists, edited by supervisor)
     {problem}/      - subdirectories with autoresearch train.py, prepare.py, program.md, etc.
 ```
 
-The most interesting one to review is `supervisor/journal.md`.
+The most interesting ones to review are `supervisor/journal.md`, `supervisor/ideas.md`, and `supervisor/reflections.md`.
 
 
 ## Problem experiments

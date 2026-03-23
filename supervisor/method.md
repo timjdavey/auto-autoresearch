@@ -25,13 +25,15 @@ This ensures each study starts from the same baseline solver, so improvement met
 
 ### 1. Read your history
 
-Read `supervisor/journal.md` and `supervisor/study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed. Pay attention to per-problem breakdowns — if improvement diverges across problems, your guidance may be too domain-specific.
+Read `supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`, and `supervisor/study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed. Pay attention to per-problem breakdowns — if improvement diverges across problems, your guidance may be too domain-specific.
 
-### 2. Update supervisor/journal.md
+### 2. Update your notes
 
-Update your journal with new ideas, reflections, and a study plan. 
+Review and update your persistent files before running the study:
 
-Also review and update your ideas for improving the scientists, and reflect on your own process. The journal's structure is yours to evolve — use whatever format helps you think clearly.
+- **`supervisor/ideas.md`** — review and update your ideas for improving the scientists. Promote, demote, or add hypotheses based on what you've learned.
+- **`supervisor/reflections.md`** — reflect on your own process as a supervisor. What's working? What would you do differently?
+- **`supervisor/journal.md`** — note your study plan (what you intend to change and why).
 
 Then proceed to reset the labs and run the study.
 
@@ -48,7 +50,9 @@ Each trial runs all problems in parallel. Each problem's Scientist is a fresh `c
 
 ### What you can change
 - `scientist/guidance.md` — the shared research methodology guidance read by all Scientists
-- `supervisor/journal.md` — your persistent journal (see below) not seen by Scientists and should be kept private
+- `supervisor/journal.md` — your persistent study log (not seen by Scientists)
+- `supervisor/ideas.md` — your ideas for improving scientists (not seen by Scientists)
+- `supervisor/reflections.md` — your meta-process reflections (not seen by Scientists)
 
 ### What you must NOT change
 - `supervisor/studies.py`, `supervisor/method.md` — top-level orchestration (locked)
@@ -62,11 +66,11 @@ Each trial runs all problems in parallel. Each problem's Scientist is a fresh `c
 
 A fresh Supervisor is invoked for each study, so make sure to write in them to carry forward what you've learned.
 
-**`supervisor/journal.md`** — Your persistent journal. It serves two purposes:
-1. **Ideas for improving the scientists** — strategies, hypotheses, and observations about how the scientists do discovery. What approaches work, what failed, what to try next. Think generically — what helps across all problems?
-2. **Self-reflection on your own process** — how you plan studies, what meta-strategies work for you as a supervisor, what you'd tell your future self.
+**`supervisor/journal.md`** — A chronological study log. One entry per study recording what changed, what happened, and what you learned.
 
-The journal starts with a suggested structure, but you should evolve it as you learn what works. You might find structured categories helpful, prefer freeform notes, or land on a hybrid. Periodically reflect on whether the format itself is serving you well.
+**`supervisor/ideas.md`** — Strategies, hypotheses, and observations about how the scientists do discovery. What approaches work, what failed, what to try next. Think generically — what helps across all problems? Organise however helps you think clearly.
+
+**`supervisor/reflections.md`** — Meta-process reflections on how you approach study planning, what's working about your own methodology, and what you'd tell your future self. Evolve the format as you learn what works.
 
 ### Recording
 
@@ -113,15 +117,19 @@ Review each problem's `train.py` and evaluation results to assess whether the Sc
 
 If the Scientists are underutilising available tools or techniques, update `scientist/guidance.md` to better guide them — but keep the guidance generic. Don't name specific algorithms for specific problems; instead guide the general approach (e.g. "always check whether you're using the full time budget before trying a different algorithm").
 
-#### 4. Study reflection in supervisor/journal.md
+#### 4. Study reflection
 
-Complete your study entry in `supervisor/journal.md`. You might include:
+Update your persistent files with what you learned:
 
-- **Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off) — per-problem and aggregate
+**`supervisor/journal.md`** — Complete your study entry. Include:
+
 - **Changes made:** what you actually changed in scientist/guidance.md
+- **Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off) — per-problem and aggregate
 - **Analysis:** what worked across all problems, what only helped some, and why
 - **Learnings:** takeaways that should inform the next study
 
-Also reflect on your own process as a supervisor: did your planning approach work well this study? Would you approach the next study differently? Update your ideas based on the results — what's proven, what's promising, what should be abandoned.
+**`supervisor/ideas.md`** — Ideas to improve the Scientists process. Update your ideas based on the results. What's proven, what's promising, what should be abandoned?
+
+**`supervisor/reflections.md`** — Ideas to improve your own process. Reflect on your own process: did your planning approach work well this study? Would you approach the next study differently?
 
 Be honest about failures. A study that taught you something is not wasted.
