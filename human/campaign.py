@@ -25,9 +25,18 @@ DEFAULT_STUDIES = 5
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
 ALLOWED_TOOLS = "Read,Edit,Write,Bash"
 SUPERVISOR_PROMPT = "Read and follow supervisor/method.md"
+SCIENTIST_DIR = Path("scientist")
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+
+
+def discover_problems():
+    """Auto-discover problem directories under scientist/."""
+    return sorted(
+        d.name for d in SCIENTIST_DIR.iterdir()
+        if d.is_dir() and (d / "program.md").exists()
+    )
 
 
 def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
@@ -42,17 +51,27 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
+    problems = discover_problems()
+    print(f"Problems: {', '.join(problems)}", file=sys.stderr)
+
     for i in range(1, num_studies + 1):
         study_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         print(f"=== Study {i} / {num_studies} ({study_timestamp}) ===", file=sys.stderr)
 
-        # Archive current lab state
+        # Archive current scientist/ state
         archive_dir = Path("archive") / study_timestamp
         shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
         print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
 
-        # Reset train.py to baseline
-        shutil.copy("scientist/baselines/train.py", "scientist/train.py")
+        # Reset each problem's train.py to baseline and delete ephemeral results
+        for problem in problems:
+            problem_dir = SCIENTIST_DIR / problem
+            original = problem_dir / "archive" / "original.py"
+            train = problem_dir / "train.py"
+            if original.exists():
+                shutil.copy(original, train)
+            results = problem_dir / "results.tsv"
+            results.unlink(missing_ok=True)
 
         # Git commit current state
         subprocess.run(["git", "add", "-A"], check=False)
@@ -60,9 +79,6 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
             ["git", "commit", "-m", f"archive study {study_timestamp}"],
             check=False,
         )
-
-        # Delete ephemeral files
-        Path("scientist/results.tsv").unlink(missing_ok=True)
 
         # Run the Supervisor
         log_dir = Path("logs") / study_timestamp
@@ -83,10 +99,16 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
 
         # Evaluate study and persist results
         try:
-            stats = analyse_and_save(timestamp=study_timestamp)
-            if stats:
-                print(f"  Study result: improvement={stats['total_improvement']:+.6f}, "
-                      f"velocity={stats['overall_velocity']:+.6f}/trial", file=sys.stderr)
+            all_stats = analyse_and_save(timestamp=study_timestamp)
+            if all_stats and "_aggregate" in all_stats:
+                agg = all_stats["_aggregate"]
+                print(f"  Aggregate: improvement={agg['total_improvement']:+.6f}, "
+                      f"velocity={agg['overall_velocity']:+.6f}/trial", file=sys.stderr)
+                for problem in problems:
+                    if problem in all_stats:
+                        s = all_stats[problem]
+                        print(f"  {problem}: improvement={s['total_improvement']:+.6f}, "
+                              f"velocity={s['overall_velocity']:+.6f}/trial", file=sys.stderr)
             else:
                 print(f"  Study result: too few trials to analyse", file=sys.stderr)
         except Exception as e:

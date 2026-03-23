@@ -5,20 +5,19 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 import supervisor.evaluate as evaluate
 from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
 
 
-def _row(avg_improvement, avg_loss=0.1, training_time=1.0, benchmark_time=0.5):
+def _row(avg_improvement, training_time=1.0):
     """Helper to build a row dict with sensible defaults."""
     return {
         "timestamp": "2026-01-01T00:00:00",
         "avg_improvement": avg_improvement,
-        "avg_loss": avg_loss,
         "training_time": training_time,
-        "benchmark_time": benchmark_time,
     }
 
 
@@ -91,17 +90,16 @@ class TestAnalyse(unittest.TestCase):
 class TestLoadResults(unittest.TestCase):
     def test_load_valid_tsv(self):
         tsv_content = (
-            "timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n"
-            "2026-01-01T00:00:00\t0.05\t0.1\t1.0\t0.5\n"
-            "2026-01-01T00:01:00\t0.10\t0.08\t2.0\t0.6\n"
+            "timestamp\tavg_improvement\ttraining_time\n"
+            "2026-01-01T00:00:00\t0.05\t1.0\n"
+            "2026-01-01T00:01:00\t0.10\t2.0\n"
         )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
             f.write(tsv_content)
             f.flush()
             tmp_path = f.name
         try:
-            with patch.object(evaluate, "RESULTS_LOG_PATH", tmp_path):
-                rows = load_results()
+            rows = load_results(tmp_path)
             self.assertEqual(len(rows), 2)
             self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
             self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
@@ -109,28 +107,24 @@ class TestLoadResults(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_missing_file_returns_empty(self):
-        with patch.object(evaluate, "RESULTS_LOG_PATH", "/tmp/nonexistent_eval_file.tsv"):
-            rows = load_results()
+        rows = load_results("/tmp/nonexistent_eval_file.tsv")
         self.assertEqual(rows, [])
 
     def test_value_types(self):
         tsv_content = (
-            "timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n"
-            "2026-03-20T17:26:16\t0.129949\t0.032781\t0.928\t0.159\n"
+            "timestamp\tavg_improvement\ttraining_time\n"
+            "2026-03-20T17:26:16\t0.129949\t0.928\n"
         )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
             f.write(tsv_content)
             f.flush()
             tmp_path = f.name
         try:
-            with patch.object(evaluate, "RESULTS_LOG_PATH", tmp_path):
-                rows = load_results()
+            rows = load_results(tmp_path)
             row = rows[0]
             self.assertIsInstance(row["timestamp"], str)
             self.assertIsInstance(row["avg_improvement"], float)
-            self.assertIsInstance(row["avg_loss"], float)
             self.assertIsInstance(row["training_time"], float)
-            self.assertIsInstance(row["benchmark_time"], float)
         finally:
             os.unlink(tmp_path)
 
@@ -140,67 +134,93 @@ class TestLoadResults(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestAnalyseAndSave(unittest.TestCase):
-    def _write_results_tsv(self, rows):
-        """Write a temporary results TSV and return its path."""
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False)
-        f.write("timestamp\tavg_improvement\tavg_loss\ttraining_time\tbenchmark_time\n")
-        for r in rows:
-            f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['avg_loss']}\t"
-                    f"{r['training_time']}\t{r['benchmark_time']}\n")
-        f.flush()
-        f.close()
-        return f.name
+    def _make_problem_dir(self, base_dir, problem_name, rows):
+        """Create a problem directory with program.md and results.tsv."""
+        problem_dir = Path(base_dir) / problem_name
+        problem_dir.mkdir(parents=True)
+        # Create program.md so discover_problems() finds it
+        (problem_dir / "program.md").write_text("# test problem\n")
+        # Write results.tsv
+        results_path = problem_dir / "results.tsv"
+        with open(results_path, "w") as f:
+            f.write("timestamp\tavg_improvement\ttraining_time\n")
+            for r in rows:
+                f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['training_time']}\n")
+        return problem_dir
 
-    def test_saves_study_row(self):
-        results_path = self._write_results_tsv([
-            _row(0.0), _row(0.05), _row(0.10),
-        ])
-        output_path = tempfile.mktemp(suffix=".csv")
-        try:
-            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
-                stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
-            self.assertIsNotNone(stats)
-            self.assertEqual(stats["num_trials"], 3)
-            # Verify output file
+    def test_saves_per_problem_and_aggregate_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scientist_dir = Path(tmpdir) / "scientist"
+            scientist_dir.mkdir()
+            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05), _row(0.10)])
+            self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.03), _row(0.06)])
+
+            output_path = os.path.join(tmpdir, "study_results.csv")
+            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+
+            self.assertIsNotNone(all_stats)
+            self.assertIn("prob_a", all_stats)
+            self.assertIn("prob_b", all_stats)
+            self.assertIn("_aggregate", all_stats)
+
+            # Verify CSV has 3 rows (prob_a, prob_b, _aggregate)
             import csv
             with open(output_path) as f:
                 reader = list(csv.DictReader(f))
-            self.assertEqual(len(reader), 1)
-            self.assertEqual(reader[0]["timestamp"], "2026-01-01T00:00:00")
+            self.assertEqual(len(reader), 3)
+            problems_in_csv = [r["problem"] for r in reader]
+            self.assertIn("prob_a", problems_in_csv)
+            self.assertIn("prob_b", problems_in_csv)
+            self.assertIn("_aggregate", problems_in_csv)
             self.assertEqual(set(reader[0].keys()), set(STUDY_FIELDS))
-        finally:
-            os.unlink(results_path)
-            if os.path.exists(output_path):
-                os.unlink(output_path)
 
     def test_returns_none_with_too_few_rows(self):
-        results_path = self._write_results_tsv([_row(0.0)])
-        output_path = tempfile.mktemp(suffix=".csv")
-        try:
-            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
-                stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
-            self.assertIsNone(stats)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scientist_dir = Path(tmpdir) / "scientist"
+            scientist_dir.mkdir()
+            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0)])
+
+            output_path = os.path.join(tmpdir, "study_results.csv")
+            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+
+            self.assertIsNone(all_stats)
             self.assertFalse(os.path.exists(output_path))
-        finally:
-            os.unlink(results_path)
 
     def test_appends_multiple_studies(self):
-        results_path = self._write_results_tsv([_row(0.0), _row(0.05)])
-        output_path = tempfile.mktemp(suffix=".csv")
-        try:
-            with patch.object(evaluate, "RESULTS_LOG_PATH", results_path):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scientist_dir = Path(tmpdir) / "scientist"
+            scientist_dir.mkdir()
+            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05)])
+
+            output_path = os.path.join(tmpdir, "study_results.csv")
+            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
                 analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
                 analyse_and_save(timestamp="2026-01-02T00:00:00", output_path=output_path)
+
             import csv
             with open(output_path) as f:
                 reader = list(csv.DictReader(f))
-            self.assertEqual(len(reader), 2)
-            self.assertEqual(reader[0]["timestamp"], "2026-01-01T00:00:00")
-            self.assertEqual(reader[1]["timestamp"], "2026-01-02T00:00:00")
-        finally:
-            os.unlink(results_path)
-            if os.path.exists(output_path):
-                os.unlink(output_path)
+            # 2 studies x 2 rows each (prob_a + _aggregate)
+            self.assertEqual(len(reader), 4)
+            timestamps = set(r["timestamp"] for r in reader)
+            self.assertEqual(timestamps, {"2026-01-01T00:00:00", "2026-01-02T00:00:00"})
+
+    def test_aggregate_is_mean_of_problems(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scientist_dir = Path(tmpdir) / "scientist"
+            scientist_dir.mkdir()
+            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.10)])
+            self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.06)])
+
+            output_path = os.path.join(tmpdir, "study_results.csv")
+            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+
+            agg = all_stats["_aggregate"]
+            # Mean of total_improvement: (0.10 + 0.06) / 2 = 0.08
+            self.assertAlmostEqual(agg["total_improvement"], 0.08)
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +269,12 @@ class TestPrintReport(unittest.TestCase):
             print_report(self._stats(tailing_off=False))
         output = buf.getvalue()
         self.assertIn("no", output.lower())
+
+    def test_with_problem_name(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            print_report(self._stats(), problem="tsp")
+        self.assertIn("[tsp]", buf.getvalue())
 
 
 if __name__ == "__main__":

@@ -301,7 +301,7 @@ def log_result(train_results):
 
 
 if __name__ == "__main__":
-    from scientist.train import solve
+    from scientist.tsp.train import solve
 
     train_results = evaluate(solve)
 

@@ -7,15 +7,15 @@ pre-study sanity check or CI gate.
 
 import unittest
 
-from scientist.prepare import TRAIN_INSTANCES, _generate_random_instance, validate_tour
+from scientist.tsp.prepare import TRAIN_INSTANCES, _generate_random_instance, validate_tour
 
 
 def _get_solve():
     """Import solve fresh to pick up whatever the Scientist wrote."""
     import importlib
-    import scientist.train
-    importlib.reload(scientist.train)
-    return scientist.train.solve
+    import scientist.tsp.train
+    importlib.reload(scientist.tsp.train)
+    return scientist.tsp.train.solve
 
 
 _solve = _get_solve()

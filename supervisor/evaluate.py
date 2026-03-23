@@ -1,6 +1,7 @@
 """
 evaluate.py — Analyse Scientist progress after a study completes.
-Reads the stable log at scientist/results.tsv (written by prepare.py).
+Reads the stable log at scientist/{problem}/results.tsv (written by prepare.py)
+for each discovered problem.
 
 Usage:
     python evaluate.py
@@ -10,15 +11,27 @@ import csv
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
-RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "scientist", "results.tsv")
+SCIENTIST_DIR = Path(__file__).parent.parent / "scientist"
 
 
-def load_results():
-    """Load all rows from results.tsv, returning list of dicts with floats."""
-    if not os.path.exists(RESULTS_LOG_PATH):
+def discover_problems():
+    """Auto-discover problem directories under scientist/."""
+    return sorted(
+        d.name for d in SCIENTIST_DIR.iterdir()
+        if d.is_dir() and (d / "program.md").exists()
+    )
+
+
+def load_results(results_path=None):
+    """Load all rows from a results.tsv, returning list of dicts with floats."""
+    if results_path is None:
+        # Legacy fallback — shouldn't be needed
+        results_path = SCIENTIST_DIR / "results.tsv"
+    if not os.path.exists(results_path):
         return []
-    with open(RESULTS_LOG_PATH, newline="") as f:
+    with open(results_path, newline="") as f:
         rows = []
         for row in csv.DictReader(f, delimiter="\t"):
             rows.append({
@@ -60,28 +73,29 @@ def analyse(rows):
     }
 
 
-def print_report(stats):
+def print_report(stats, problem=None):
     """Print a human-readable summary."""
-    print(f"Trials: {stats['num_trials']}")
-    print(f"First avg_improvement: {stats['first_avg_improvement']:.6f}")
-    print(f"Last  avg_improvement: {stats['last_avg_improvement']:.6f}")
+    prefix = f"[{problem}] " if problem else ""
+    print(f"{prefix}Trials: {stats['num_trials']}")
+    print(f"{prefix}First avg_improvement: {stats['first_avg_improvement']:.6f}")
+    print(f"{prefix}Last  avg_improvement: {stats['last_avg_improvement']:.6f}")
     print()
-    print(f"Total improvement:       {stats['total_improvement']:+.6f}")
-    print(f"Improvement per trial:   {stats['improvement_per_trial']:+.6f}")
+    print(f"{prefix}Total improvement:       {stats['total_improvement']:+.6f}")
+    print(f"{prefix}Improvement per trial:   {stats['improvement_per_trial']:+.6f}")
     print()
-    print(f"Final 20% ({stats['tail_trials']} trials):")
-    print(f"  Velocity: {stats['tail_velocity']:+.6f} per trial")
-    print(f"  Overall:  {stats['overall_velocity']:+.6f} per trial")
+    print(f"{prefix}Final 20% ({stats['tail_trials']} trials):")
+    print(f"{prefix}  Velocity: {stats['tail_velocity']:+.6f} per trial")
+    print(f"{prefix}  Overall:  {stats['overall_velocity']:+.6f} per trial")
     if stats["tailing_off"] is None:
-        print(f"  Tailing off: too few trials to judge")
+        print(f"{prefix}  Tailing off: too few trials to judge")
     elif stats["tailing_off"]:
-        print(f"  Tailing off: YES (final velocity < 50% of overall)")
+        print(f"{prefix}  Tailing off: YES (final velocity < 50% of overall)")
     else:
-        print(f"  Tailing off: no")
+        print(f"{prefix}  Tailing off: no")
 
 
 STUDY_FIELDS = [
-    "timestamp", "num_trials",
+    "timestamp", "problem", "num_trials",
     "first_avg_improvement", "last_avg_improvement",
     "total_improvement", "improvement_per_trial",
     "tail_trials", "tail_velocity", "overall_velocity", "tailing_off",
@@ -91,35 +105,85 @@ STUDY_RESULTS_PATH = os.path.join(os.path.dirname(__file__), "study_results.csv"
 
 
 def analyse_and_save(timestamp=None, output_path=None):
-    """Analyse current study results and append summary to persistent CSV."""
+    """Analyse current study results for all problems and append summary to persistent CSV.
+
+    Writes one row per problem plus an _aggregate row.
+    Returns dict mapping problem name -> stats (plus '_aggregate' key).
+    """
     if timestamp is None:
         timestamp = datetime.now().isoformat(timespec="seconds")
     if output_path is None:
         output_path = STUDY_RESULTS_PATH
-    rows = load_results()
-    if len(rows) < 2:
+
+    problems = discover_problems()
+    all_stats = {}
+
+    for problem in problems:
+        results_path = SCIENTIST_DIR / problem / "results.tsv"
+        rows = load_results(results_path)
+        if len(rows) < 2:
+            continue
+        all_stats[problem] = analyse(rows)
+
+    if not all_stats:
         return None
-    stats = analyse(rows)
+
+    # Compute aggregate (mean across problems)
+    agg_keys = [
+        "num_trials", "first_avg_improvement", "last_avg_improvement",
+        "total_improvement", "improvement_per_trial",
+        "tail_trials", "tail_velocity", "overall_velocity",
+    ]
+    n_problems = len(all_stats)
+    aggregate = {}
+    for key in agg_keys:
+        aggregate[key] = sum(s[key] for s in all_stats.values()) / n_problems
+    # Round num_trials and tail_trials for aggregate
+    aggregate["num_trials"] = round(aggregate["num_trials"])
+    aggregate["tail_trials"] = round(aggregate["tail_trials"])
+    # Tailing off: True if any problem is tailing off
+    tailing_values = [s["tailing_off"] for s in all_stats.values() if s["tailing_off"] is not None]
+    aggregate["tailing_off"] = any(tailing_values) if tailing_values else None
+    all_stats["_aggregate"] = aggregate
+
+    # Write to CSV
     write_header = not os.path.exists(output_path)
     with open(output_path, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=STUDY_FIELDS)
         if write_header:
             writer.writeheader()
-        writer.writerow({
-            "timestamp": timestamp,
-            **{k: stats[k] for k in STUDY_FIELDS[1:]},
-        })
-    return stats
+        for problem_name, stats in all_stats.items():
+            writer.writerow({
+                "timestamp": timestamp,
+                "problem": problem_name,
+                **{k: stats[k] for k in STUDY_FIELDS[2:]},
+            })
+
+    return all_stats
 
 
 if __name__ == "__main__":
-    rows = load_results()
-    if not rows:
-        print("No results found. Run a study first.")
+    problems = discover_problems()
+    if not problems:
+        print("No problems found in scientist/.")
         sys.exit(1)
-    if len(rows) < 2:
-        print("Only 1 trial recorded. Need at least 2 for analysis.")
-        print(f"  avg_improvement: {rows[0]['avg_improvement']:.6f}")
-        sys.exit(0)
-    stats = analyse(rows)
-    print_report(stats)
+
+    any_results = False
+    for problem in problems:
+        results_path = SCIENTIST_DIR / problem / "results.tsv"
+        rows = load_results(results_path)
+        if not rows:
+            print(f"[{problem}] No results found.")
+            continue
+        if len(rows) < 2:
+            print(f"[{problem}] Only 1 trial recorded. Need at least 2 for analysis.")
+            print(f"  avg_improvement: {rows[0]['avg_improvement']:.6f}")
+            continue
+        any_results = True
+        stats = analyse(rows)
+        print_report(stats, problem=problem)
+        print()
+
+    if not any_results:
+        print("No problems had enough results for analysis.")
+        sys.exit(1)

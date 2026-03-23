@@ -4,7 +4,7 @@
 # Neither the Supervisor nor the Scientist should modify it.
 # ============================================================
 #
-# Runs a study: one or more Scientist invocations.
+# Runs a study: one or more Scientist invocations across all problems.
 #
 # Usage:
 #   python study.py                       # 100 trials, sonnet (default)
@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -26,14 +27,58 @@ DEFAULT_MODEL = "sonnet"
 DEFAULT_TRIALS = 100
 DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
-SCIENTIST_PROMPT = "Read and follow scientist/program.md"
+SCIENTIST_DIR = Path("scientist")
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 
+def discover_problems():
+    """Auto-discover problem directories under scientist/."""
+    return sorted(
+        d.name for d in SCIENTIST_DIR.iterdir()
+        if d.is_dir() and (d / "program.md").exists()
+    )
+
+
+def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout):
+    """Run a single trial for a single problem. Returns (problem, trial_num, success)."""
+    problem_dir = SCIENTIST_DIR / problem
+    archive_dir = problem_dir / "archive" / timestamp
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    # Archive train.py before Scientist modifies it
+    train_path = problem_dir / "train.py"
+    if train_path.exists():
+        shutil.copy(train_path, archive_dir / f"trial-{trial_num:03d}.py")
+
+    prompt = f"Read and follow scientist/{problem}/program.md"
+    log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
+    try:
+        with open(log_file, "w") as f:
+            subprocess.run(
+                claude_cmd,
+                input=prompt,
+                text=True,
+                stdout=f,
+                stderr=sys.stderr,
+                timeout=trial_timeout,
+            )
+        return problem, trial_num, True
+    except subprocess.TimeoutExpired:
+        print(f"=== {problem} trial {trial_num} timed out after {trial_timeout}s, skipping ===", file=sys.stderr)
+        return problem, trial_num, False
+
+
 def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL):
-    """Run a study and return the log directory path."""
+    """Run a study across all problems and return the log directory path."""
+    problems = discover_problems()
+    if not problems:
+        print("No problems found in scientist/. Each problem needs a program.md.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Problems: {', '.join(problems)}", file=sys.stderr)
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = Path("logs") / timestamp
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -46,28 +91,19 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
-    archive_dir = Path("scientist/archive") / timestamp
-    archive_dir.mkdir(parents=True, exist_ok=True)
-
     for i in range(1, num_trials + 1):
-        print(f"=== Trial {i} / {num_trials} ===", file=sys.stderr)
+        print(f"=== Trial {i} / {num_trials} ({', '.join(problems)}) ===", file=sys.stderr)
 
-        # Archive train.py before Scientist modifies it
-        shutil.copy("scientist/train.py", archive_dir / f"trial-{i:03d}.py")
-
-        log_file = log_dir / f"trial-{i:03d}.jsonl"
-        try:
-            with open(log_file, "w") as f:
-                subprocess.run(
-                    claude_cmd,
-                    input=SCIENTIST_PROMPT,
-                    text=True,
-                    stdout=f,
-                    stderr=sys.stderr,
-                    timeout=trial_timeout,
-                )
-        except subprocess.TimeoutExpired:
-            print(f"=== Trial {i} timed out after {trial_timeout}s, skipping ===", file=sys.stderr)
+        # Run all problems in parallel for this trial
+        with ThreadPoolExecutor(max_workers=len(problems)) as pool:
+            futures = {
+                pool.submit(run_trial, problem, i, timestamp, log_dir, claude_cmd, trial_timeout): problem
+                for problem in problems
+            }
+            for future in as_completed(futures):
+                problem, trial_num, success = future.result()
+                status = "done" if success else "TIMEOUT"
+                print(f"  {problem} trial {trial_num}: {status}", file=sys.stderr)
 
     analyse_and_save(timestamp=timestamp)
     return log_dir

@@ -3,8 +3,8 @@
 import math
 import unittest
 
-import scientist.prepare as prepare
-from scientist.prepare import (
+import scientist.tsp.prepare as prepare
+from scientist.tsp.prepare import (
     BENCHMARK_INSTANCES,
     INSTANCES,
     NN_BASELINES,
@@ -219,7 +219,7 @@ class TestInstanceData(unittest.TestCase):
             self.assertIn(name, TRAIN_INSTANCES)
 
     def test_random_instances_deterministic(self):
-        from scientist.prepare import _generate_random_instance
+        from scientist.tsp.prepare import _generate_random_instance
         self.assertEqual(_generate_random_instance(20, seed=142857), list(TRAIN_INSTANCES["rand20a"]["coords"]))
 
     def test_benchmark_have_optimal(self):
