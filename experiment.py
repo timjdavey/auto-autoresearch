@@ -32,7 +32,9 @@ from supervisor.studies import run_study
 DEFAULT_MODEL = "opus"
 DEFAULT_STUDIES = 20
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
-ALLOWED_TOOLS = "Read,Edit,Write,Bash"
+ALLOWED_TOOLS = "Read,Edit,Write"
+SUPERVISOR_MAX_BUDGET = 2.0
+SCIENTIST_MAX_BUDGET = 0.25
 SUPERVISOR_PRE_PROMPT = "Read and follow supervisor/method.md — PRE-STUDY phase only."
 SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY phase only."
 
@@ -40,9 +42,9 @@ SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY ph
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 
-def run_supervisor(model, allowed_tools, prompt, log_file, timeout):
-    """Run a Supervisor CLI call (Claude or Gemini), logging to log_file."""
-    cli_cmd, stdin_input = build_cmd(model, prompt, allowed_tools)
+def run_supervisor(model, allowed_tools, prompt, log_file, timeout, max_budget_usd=None):
+    """Run a Supervisor CLI call (Claude or Codex), logging to log_file."""
+    cli_cmd, stdin_input = build_cmd(model, prompt, allowed_tools, max_budget_usd=max_budget_usd)
     with open(log_file, "w") as f:
         proc = subprocess.Popen(
             cli_cmd,
@@ -103,13 +105,13 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 1: Pre-study Supervisor call
             print(f"  Phase 1: Pre-study planning", file=sys.stderr)
-            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout):
+            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout, max_budget_usd=SUPERVISOR_MAX_BUDGET):
                 print(f"  Pre-study supervisor failed, skipping study {i}", file=sys.stderr)
                 continue
 
             # Phase 2: Run the study (directly, no Bash timeout issues)
             print(f"  Phase 2: Running trials", file=sys.stderr)
-            study_kwargs = {"sequential": sequential}
+            study_kwargs = {"sequential": sequential, "max_budget_usd": SCIENTIST_MAX_BUDGET}
             if num_trials is not None:
                 study_kwargs["num_trials"] = num_trials
             run_study(**study_kwargs)
@@ -133,7 +135,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 3: Post-study Supervisor call
             print(f"  Phase 3: Post-study review", file=sys.stderr)
-            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout):
+            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout, max_budget_usd=SUPERVISOR_MAX_BUDGET):
                 print(f"  Warning: post-study supervisor failed (study results are saved)", file=sys.stderr)
 
         except Exception as e:

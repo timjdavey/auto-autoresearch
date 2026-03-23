@@ -11,8 +11,18 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 - **`scientist/graph_colouring/train.py`** — Your solver. Contains `solve(adj, n_nodes, n_edges)` which takes an adjacency list and returns a colouring (list of colour assignments). **This is the only file you modify.**
 - **`scientist/graph_colouring/prepare.py`** — Evaluation harness. Run `python3 -m scientist.graph_colouring.prepare` to evaluate. **Do not modify.**
 - **`scientist/graph_colouring/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
-- **`scientist/graph_colouring/archive/`** — Snapshots of `train.py` from prior trials. Read these to see exactly what code was tried before.
+- **`scientist/graph_colouring/archive/best.py`** — Code from the best-scoring prior trial. Use this if the current `train.py` is worse.
+- **`scientist/graph_colouring/archive/summary.md`** — Compact summary of all prior trials and their scores.
+- **`scientist/graph_colouring/archive/original.py`** — The original baseline code.
 - **`scientist/graph_colouring/program.md`** — This file. Read-only.
+
+## Workflow
+
+1. Read `results.tsv` and `archive/summary.md` to understand prior trial scores.
+2. Read `train.py`. If the last trial regressed, start from `archive/best.py` instead.
+3. Plan ONE targeted improvement. Make the edit.
+4. Run evaluation immediately: `python3 -m scientist.graph_colouring.prepare`
+5. If it crashes or regresses badly, revert and try a different approach. Do not spend time debugging.
 
 ## Metric
 

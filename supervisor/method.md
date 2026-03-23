@@ -108,7 +108,7 @@ Review each problem's `results.tsv` for errors or signs the Scientists misunders
 - Unexpected number of trials (more or fewer than `--trials` requested)
 - Any other signs the Scientists deviated from their instructions
 
-If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `scientist/guidance.md` to prevent the issue from recurring.
+If you find errors, diagnose the root cause using `results.tsv` and `study_results.csv`. Do NOT read raw trial log files in `logs/` — they are machine-format JSONL and very large. Then amend `scientist/guidance.md` to prevent the issue from recurring.
 
 ### 2. Cross-problem analysis
 

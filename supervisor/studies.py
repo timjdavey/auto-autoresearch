@@ -35,6 +35,7 @@ from supervisor.evaluate import analyse_and_save, load_results
 DEFAULT_MODEL = "haiku"
 DEFAULT_TRIALS = 10
 DEFAULT_TIMEOUT = 600
+DEFAULT_MAX_BUDGET = 0.25
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 
 # Immediate exit on Ctrl-C
@@ -62,7 +63,7 @@ def _log_timeout(problem_dir, problem_name, trial_timeout):
         writer.writerow(row)
 
 
-def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout):
+def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
     """Run a single trial for a single problem. Returns (problem, trial_num, status, elapsed)."""
     problem_dir = SCIENTIST_DIR / problem
     archive_dir = problem_dir / "archive" / timestamp
@@ -74,7 +75,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout):
         shutil.copy(train_path, archive_dir / f"trial-{trial_num:03d}.py")
 
     prompt = f"Read and follow scientist/{problem}/program.md"
-    cli_cmd, stdin_input = build_cmd(model, prompt, ALLOWED_TOOLS)
+    cli_cmd, stdin_input = build_cmd(model, prompt, ALLOWED_TOOLS, max_budget_usd=max_budget_usd)
     log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
     start = time.monotonic()
     with open(log_file, "w") as f:
@@ -104,13 +105,38 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout):
     return problem, trial_num, "done", elapsed
 
 
-def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_timeout):
+def _curate_archive(problem_dir, timestamp):
+    """Maintain archive/best.py and archive/summary.md after each trial."""
+    results_path = problem_dir / "results.tsv"
+    rows = load_results(results_path)
+    if not rows:
+        return
+
+    archive_dir = problem_dir / "archive"
+    ts_dir = archive_dir / timestamp
+
+    # Find the best trial and copy its code to archive/best.py
+    best_idx = max(range(len(rows)), key=lambda i: rows[i]["avg_improvement"])
+    best_trial_num = best_idx + 1  # trials are 1-indexed
+    best_file = ts_dir / f"trial-{best_trial_num:03d}.py"
+    if best_file.exists():
+        shutil.copy(best_file, archive_dir / "best.py")
+
+    # Write compact summary
+    lines = ["# Trial Summary", "", "| Trial | avg_improvement | status |", "|-------|----------------|--------|"]
+    for i, row in enumerate(rows):
+        marker = " *best*" if i == best_idx else ""
+        lines.append(f"| {i + 1} | {row['avg_improvement']:+.6f}{marker} | ok |")
+    (archive_dir / "summary.md").write_text("\n".join(lines) + "\n")
+
+
+def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
     """Run all trials for a single problem sequentially."""
     study_start = time.monotonic()
     problem_label = problem[:16].ljust(16)
     for i in range(1, num_trials + 1):
         problem, trial_num, status, elapsed = run_trial(
-            problem, i, timestamp, log_dir, model, trial_timeout
+            problem, i, timestamp, log_dir, model, trial_timeout, max_budget_usd=max_budget_usd
         )
         total = time.monotonic() - study_start
 
@@ -137,8 +163,14 @@ def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_ti
             file=sys.stderr,
         )
 
+        # Curate archive: maintain best.py + summary.md
+        try:
+            _curate_archive(SCIENTIST_DIR / problem, timestamp)
+        except Exception:
+            pass
 
-def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL, sequential=True):
+
+def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL, sequential=True, max_budget_usd=DEFAULT_MAX_BUDGET):
     """Run a study across all problems and return the log directory path."""
     problems = discover_problems()
     if not problems:
@@ -159,7 +191,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         futures = {
             pool.submit(
                 _run_problem_trials, problem, num_trials,
-                timestamp, log_dir, model, trial_timeout
+                timestamp, log_dir, model, trial_timeout, max_budget_usd
             ): problem
             for problem in problems
         }
@@ -181,6 +213,7 @@ def main():
     parser.add_argument("--opus", action="store_true", help="Shorthand for --model opus")
     parser.add_argument("--haiku", action="store_true", help="Shorthand for --model haiku")
     parser.add_argument("--codex", action="store_true", help="Shorthand for --model codex (gpt-5.4-mini)")
+    parser.add_argument("--max-budget", type=float, default=DEFAULT_MAX_BUDGET, help=f"Max USD per trial (default: {DEFAULT_MAX_BUDGET})")
     parser.add_argument("--sequential", action="store_true", default=True, help="Run problems sequentially (default, avoids rate limits)")
     parser.add_argument("--parallel", action="store_true", help="Run problems in parallel")
     args = parser.parse_args()
@@ -188,7 +221,7 @@ def main():
     model = ("opus" if args.opus else "haiku" if args.haiku
              else "codex" if args.codex else args.model)
     sequential = not args.parallel
-    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model, sequential=sequential)
+    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model, sequential=sequential, max_budget_usd=args.max_budget)
     print(f"Logs: {log_dir}", file=sys.stderr)
 
 

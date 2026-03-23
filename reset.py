@@ -34,13 +34,18 @@ def soft_reset(problems=None):
             print(f"  Warning: problem directory {problem_dir} not found, skipping", file=sys.stderr)
             continue
 
-        # Remove timestamped archive dirs (preserve original.py)
+        # Remove timestamped archive dirs and curated files (preserve original.py)
         archive_dir = problem_dir / "archive"
         if archive_dir.is_dir():
             for child in archive_dir.iterdir():
                 if child.is_dir():
                     shutil.rmtree(child)
                     print(f"  Deleted {child}", file=sys.stderr)
+            for extra in ("best.py", "summary.md"):
+                extra_path = archive_dir / extra
+                if extra_path.exists():
+                    extra_path.unlink()
+                    print(f"  Deleted {extra_path}", file=sys.stderr)
 
         # Delete results
         results = problem_dir / "results.tsv"
