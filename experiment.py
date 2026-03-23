@@ -69,7 +69,7 @@ def run_supervisor(model, allowed_tools, prompt, log_file, timeout):
     return True
 
 
-def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL, num_trials=None):
+def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL, num_trials=None, sequential=True):
     """Run an experiment of sequential studies."""
     problems = discover_problems()
     print(f"Problems: {', '.join(problems)}", file=sys.stderr)
@@ -109,7 +109,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 2: Run the study (directly, no Bash timeout issues)
             print(f"  Phase 2: Running trials", file=sys.stderr)
-            study_kwargs = {}
+            study_kwargs = {"sequential": sequential}
             if num_trials is not None:
                 study_kwargs["num_trials"] = num_trials
             run_study(**study_kwargs)
@@ -147,9 +147,12 @@ def main():
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use: opus/sonnet/haiku (Claude) or pro/flash (Gemini) (default: {DEFAULT_MODEL})")
     parser.add_argument("--trials", type=int, default=None, help="Number of trials per study (default: study default)")
+    parser.add_argument("--sequential", action="store_true", default=True, help="Run problems sequentially (default, avoids rate limits)")
+    parser.add_argument("--parallel", action="store_true", help="Run problems in parallel")
     args = parser.parse_args()
 
-    run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model, num_trials=args.trials)
+    sequential = not args.parallel
+    run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model, num_trials=args.trials, sequential=sequential)
 
 
 if __name__ == "__main__":

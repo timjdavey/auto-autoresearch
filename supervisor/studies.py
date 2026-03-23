@@ -139,7 +139,7 @@ def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_ti
         )
 
 
-def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL):
+def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL, sequential=True):
     """Run a study across all problems and return the log directory path."""
     problems = discover_problems()
     if not problems:
@@ -154,8 +154,9 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
     log_dir = Path("logs") / timestamp
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Run each problem's full trial sequence in parallel
-    with ThreadPoolExecutor(max_workers=len(problems)) as pool:
+    # Run each problem's full trial sequence
+    max_workers = 1 if sequential else len(problems)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
             pool.submit(
                 _run_problem_trials, problem, num_trials,
@@ -182,12 +183,15 @@ def main():
     parser.add_argument("--haiku", action="store_true", help="Shorthand for --model haiku")
     parser.add_argument("--pro", action="store_true", help="Shorthand for --model pro (Gemini)")
     parser.add_argument("--flash", action="store_true", help="Shorthand for --model flash (Gemini)")
+    parser.add_argument("--sequential", action="store_true", default=True, help="Run problems sequentially (default, avoids rate limits)")
+    parser.add_argument("--parallel", action="store_true", help="Run problems in parallel")
     args = parser.parse_args()
 
     model = ("opus" if args.opus else "haiku" if args.haiku
              else "pro" if args.pro else "flash" if args.flash
              else args.model)
-    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model)
+    sequential = not args.parallel
+    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model, sequential=sequential)
     print(f"Logs: {log_dir}", file=sys.stderr)
 
 
