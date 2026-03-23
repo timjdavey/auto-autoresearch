@@ -12,6 +12,7 @@
 #   uv run experiment --timeout 7200           # 2-hour per-study timeout
 #   uv run experiment --trials 5                # 5 trials per study
 #   uv run experiment --model sonnet           # use sonnet for Supervisor
+#   uv run experiment --model pro              # use gemini pro for Supervisor
 
 import argparse
 import os
@@ -22,6 +23,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from cli import build_cmd
 from scientist import SCIENTIST_DIR, discover_problems
 from reset import soft_reset
 from supervisor.evaluate import analyse_and_save
@@ -38,11 +40,12 @@ SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY ph
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 
-def run_supervisor(claude_cmd, prompt, log_file, timeout):
-    """Run a Supervisor claude -p call, logging to log_file."""
+def run_supervisor(model, allowed_tools, prompt, log_file, timeout):
+    """Run a Supervisor CLI call (Claude or Gemini), logging to log_file."""
+    cli_cmd, stdin_input = build_cmd(model, prompt, allowed_tools)
     with open(log_file, "w") as f:
         proc = subprocess.Popen(
-            claude_cmd,
+            cli_cmd,
             stdin=subprocess.PIPE,
             stdout=f,
             stderr=sys.stderr,
@@ -50,7 +53,7 @@ def run_supervisor(claude_cmd, prompt, log_file, timeout):
             start_new_session=True,
         )
         try:
-            proc.communicate(input=prompt, timeout=timeout)
+            proc.communicate(input=stdin_input, timeout=timeout)
         except subprocess.TimeoutExpired:
             print(f"  Supervisor call timed out after {timeout}s, killing process group", file=sys.stderr)
             os.killpg(proc.pid, signal.SIGTERM)
@@ -68,14 +71,6 @@ def run_supervisor(claude_cmd, prompt, log_file, timeout):
 
 def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL, num_trials=None):
     """Run an experiment of sequential studies."""
-    claude_cmd = [
-        "claude", "-p",
-        "--verbose",
-        "--model", model,
-        "--output-format", "stream-json",
-        "--allowedTools", ALLOWED_TOOLS,
-    ]
-
     problems = discover_problems()
     print(f"Problems: {', '.join(problems)}", file=sys.stderr)
 
@@ -108,7 +103,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 1: Pre-study Supervisor call
             print(f"  Phase 1: Pre-study planning", file=sys.stderr)
-            if not run_supervisor(claude_cmd, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout):
+            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout):
                 print(f"  Pre-study supervisor failed, skipping study {i}", file=sys.stderr)
                 continue
 
@@ -138,7 +133,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 3: Post-study Supervisor call
             print(f"  Phase 3: Post-study review", file=sys.stderr)
-            if not run_supervisor(claude_cmd, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout):
+            if not run_supervisor(model, ALLOWED_TOOLS, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout):
                 print(f"  Warning: post-study supervisor failed (study results are saved)", file=sys.stderr)
 
         except Exception as e:
@@ -150,7 +145,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
     parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES, help=f"Number of studies (default: {DEFAULT_STUDIES})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
-    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Claude model to use (default: {DEFAULT_MODEL})")
+    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use: opus/sonnet/haiku (Claude) or pro/flash (Gemini) (default: {DEFAULT_MODEL})")
     parser.add_argument("--trials", type=int, default=None, help="Number of trials per study (default: study default)")
     args = parser.parse_args()
 
