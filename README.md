@@ -21,56 +21,26 @@ There are two layers to the system:
 * **Inner improvement only**. For the same reasons as above, we allow the Supervisor to only do a minimal amount of self-improvement via self reflection in the `/supervisor/journal.md` file.
 * **Filesystem over git**. We've opted for storing previous iterations as files over git as it allows us to slightly easier manage what previous experiments are considered (as this is a multi-layered inception style system of iterations).
 * **Invocation**. Scientists are explicitly called in parallel via a CLI as this was more robust than trying to get the Supervisor to spin up multiple parallel sub-agents. Similarly we use claude here because that's our subscription, but could add codex on request.
-
+* **Minimal**. It's already a complex conceptual setup, so we've tried to not overengineer anything. We've only included two problems to solve for generalisation & replication, but trying to keep it at only two.
+* **Agency**. Similarly starting with just one memory file for the Supervisor and no memory files (similar to autoresearch) aims to give the Supervisor the highest agency it can explore the space on it's own. Likewise for `train.py` in the inner cycles.
 
 ## Project structure
 
-### `scientist/` — Inner agents
+Key files:
 
-Each problem lives in its own subdirectory (e.g. `tsp/`, `graph_colouring/`):
-* `{problem}/train.py` contains a `solve` function which the **Scientist** edits.
-* `{problem}/prepare.py` evaluation harness. **Not modified (even by Supervisor to prevent gaming).**
-* `{problem}/program.md` problem-specific instructions for the **Scientist**. **Not modified by agents.**
-* `{problem}/results.tsv` auto-written trial results.
-* `{problem}/archive/` trial snapshots and baseline (`original.py`).
-* `{problem}/baselines/` benchmark instances.
-* `guidance.md` shared research methodology guidance, edited by the **Supervisor**.
-
-### `supervisor/` — Outer agent
-
-* `studies.py` runs a study: trials across all problems in parallel. **Not modified by agents.**
-* `evaluate.py` post-study analysis: reads results, computes stats. **Not modified by agents.**
-* `method.md` instructions for the **Supervisor**. **Not modified by agents.**
-* `journal.md` the **Supervisor's** persistent self-reflection journal.
-* `study_results.csv` aggregated cross-study results (auto-written by `evaluate.py`).
-
-### Root — Orchestration (human-only)
-
-* `experiment.py` runs a full experiment: multiple Supervisor studies in sequence. **Not modified by agents.**
-
-
-## Commands
-
-Run a full experiment (default 5 studies, opus):
 ```
-uv run experiment
-uv run experiment --studies 3 --model sonnet
+experiment.py       - Starts the supervisor loop (human-only edit)
+supervisor/
+    studies.py      - runs a round of scientist studies (human-only edit)
+    evaluate.py     - evaluates a study (human-only edit)
+    method.md       - the program.md for the supervisor (human-only edit)
+    journal.md      - a scratchpad of ideas and memories (supervisor views & edits)
+scientist/
+    guidance.md     - on how to run the scientific process (viewed by all scientists, edited by supervisor)
+    {problem}/      - subdirectories with autoresearch train.py, prepare.py, program.md, etc.
 ```
 
-Run a single study (default 100 trials, sonnet):
-```
-uv run study --trials 5
-```
-
-Evaluate the current results:
-```
-uv run evaluate
-```
-
-Run tests:
-```
-uv run pytest
-```
+The most interesting one to review is `supervisor/journal.md`.
 
 
 ## Problem experiments
@@ -84,3 +54,20 @@ We chose these as we want:
 - Context contained: Can be run in a single python file
 - Hardware independant: so scalar metric ideally not time based
 - Indefinite: optimization landscape for high discoverability variance
+
+
+## Commands
+
+Run a full experiment (default 5 studies, opus):
+```
+uv run experiment
+uv run experiment --studies 3 --model sonnet
+```
+
+## Quick start
+
+Run tests:
+```
+uv run pytest
+```
+
