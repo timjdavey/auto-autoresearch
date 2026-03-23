@@ -19,6 +19,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +29,7 @@ from reset import soft_reset
 from supervisor.evaluate import analyse_and_save
 
 DEFAULT_MODEL = "sonnet"
-DEFAULT_TRIALS = 15
+DEFAULT_TRIALS = 10
 DEFAULT_TIMEOUT = 600
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 
@@ -55,7 +56,7 @@ def _log_timeout(problem_dir, trial_timeout):
 
 
 def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout):
-    """Run a single trial for a single problem. Returns (problem, trial_num, success)."""
+    """Run a single trial for a single problem. Returns (problem, trial_num, status, elapsed)."""
     problem_dir = SCIENTIST_DIR / problem
     archive_dir = problem_dir / "archive" / timestamp
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -67,6 +68,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
 
     prompt = f"Read and follow scientist/{problem}/program.md"
     log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
+    start = time.monotonic()
     with open(log_file, "w") as f:
         proc = subprocess.Popen(
             claude_cmd,
@@ -79,7 +81,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
         try:
             proc.communicate(input=prompt, timeout=trial_timeout)
         except subprocess.TimeoutExpired:
-            print(f"=== {problem} trial {trial_num} timed out after {trial_timeout}s, killing process group ===", file=sys.stderr)
+            elapsed = time.monotonic() - start
             os.killpg(proc.pid, signal.SIGTERM)
             try:
                 proc.wait(timeout=5)
@@ -87,11 +89,22 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
             _log_timeout(problem_dir, trial_timeout)
-            return problem, trial_num, False
+            return problem, trial_num, "TIMEOUT", elapsed
+    elapsed = time.monotonic() - start
     if proc.returncode != 0:
-        print(f"=== {problem} trial {trial_num} failed (exit code {proc.returncode}) ===", file=sys.stderr)
-        return problem, trial_num, False
-    return problem, trial_num, True
+        return problem, trial_num, "FAILED", elapsed
+    return problem, trial_num, "done", elapsed
+
+
+def _run_problem_trials(problem, num_trials, timestamp, log_dir, claude_cmd, trial_timeout):
+    """Run all trials for a single problem sequentially."""
+    study_start = time.monotonic()
+    for i in range(1, num_trials + 1):
+        problem, trial_num, status, elapsed = run_trial(
+            problem, i, timestamp, log_dir, claude_cmd, trial_timeout
+        )
+        total = time.monotonic() - study_start
+        print(f"  {problem} trial {trial_num}: {status} ({elapsed:.1f}s) [total: {total:.1f}s]", file=sys.stderr)
 
 
 def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL):
@@ -117,19 +130,17 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         "--allowedTools", ALLOWED_TOOLS,
     ]
 
-    for i in range(1, num_trials + 1):
-        print(f"=== Trial {i} / {num_trials} ({', '.join(problems)}) ===", file=sys.stderr)
-
-        # Run all problems in parallel for this trial
-        with ThreadPoolExecutor(max_workers=len(problems)) as pool:
-            futures = {
-                pool.submit(run_trial, problem, i, timestamp, log_dir, claude_cmd, trial_timeout): problem
-                for problem in problems
-            }
-            for future in as_completed(futures):
-                problem, trial_num, success = future.result()
-                status = "done" if success else "TIMEOUT"
-                print(f"  {problem} trial {trial_num}: {status}", file=sys.stderr)
+    # Run each problem's full trial sequence in parallel
+    with ThreadPoolExecutor(max_workers=len(problems)) as pool:
+        futures = {
+            pool.submit(
+                _run_problem_trials, problem, num_trials,
+                timestamp, log_dir, claude_cmd, trial_timeout
+            ): problem
+            for problem in problems
+        }
+        for future in as_completed(futures):
+            future.result()  # propagate exceptions
 
     try:
         analyse_and_save(timestamp=timestamp)
