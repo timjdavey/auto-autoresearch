@@ -13,15 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-SCIENTIST_DIR = Path(__file__).parent.parent / "scientist"
-
-
-def discover_problems():
-    """Auto-discover problem directories under scientist/."""
-    return sorted(
-        d.name for d in SCIENTIST_DIR.iterdir()
-        if d.is_dir() and (d / "program.md").exists()
-    )
+from scientist import SCIENTIST_DIR, discover_problems
 
 
 def load_results(results_path=None):

@@ -8,6 +8,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+import scientist
 import supervisor.evaluate as evaluate
 from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
 
@@ -156,7 +157,8 @@ class TestAnalyseAndSave(unittest.TestCase):
             self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.03), _row(0.06)])
 
             output_path = os.path.join(tmpdir, "study_results.csv")
-            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
+                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
                 all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
 
             self.assertIsNotNone(all_stats)
@@ -182,7 +184,8 @@ class TestAnalyseAndSave(unittest.TestCase):
             self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0)])
 
             output_path = os.path.join(tmpdir, "study_results.csv")
-            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
+                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
                 all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
 
             self.assertIsNone(all_stats)
@@ -195,7 +198,8 @@ class TestAnalyseAndSave(unittest.TestCase):
             self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05)])
 
             output_path = os.path.join(tmpdir, "study_results.csv")
-            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
+                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
                 analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
                 analyse_and_save(timestamp="2026-01-02T00:00:00", output_path=output_path)
 
@@ -215,7 +219,8 @@ class TestAnalyseAndSave(unittest.TestCase):
             self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.06)])
 
             output_path = os.path.join(tmpdir, "study_results.csv")
-            with patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
+                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
                 all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
 
             agg = all_stats["_aggregate"]

@@ -64,11 +64,11 @@ def _parse_col_file(filepath):
 
 # Chromatic numbers from DIMACS challenge results and literature
 _OPTIMAL = {
+    "myciel4": 5,
     "queen5_5": 5,
+    "queen6_6": 7,
     "myciel5": 6,
-    "jean": 10,
     "queen8_8": 9,
-    "le450_5a": 5,
 }
 
 _BASELINES_DIR = Path(__file__).parent / "baselines"
@@ -162,26 +162,26 @@ def _count_colours(colouring):
 # Precomputed: number of colours used by greedy on each training instance.
 # To recompute: run _greedy_solve on each instance and call _count_colours.
 GREEDY_BASELINES = {
-    "rand30a": 0,   # placeholder — will be computed
-    "rand30b": 0,
-    "rand50a": 0,
-    "rand50b": 0,
-    "rand50c": 0,
-    "rand50d": 0,
-    "rand50e": 0,
-    "rand50f": 0,
-    "rand75a": 0,
-    "rand75b": 0,
-    "rand75c": 0,
-    "rand75d": 0,
-    "rand100a": 0,
-    "rand100b": 0,
-    "rand100c": 0,
-    "rand100d": 0,
-    "rand100e": 0,
-    "rand100f": 0,
-    "rand150a": 0,
-    "rand150b": 0,
+    "rand30a": 5,
+    "rand30b": 6,
+    "rand50a": 8,
+    "rand50b": 8,
+    "rand50c": 10,
+    "rand50d": 9,
+    "rand50e": 12,
+    "rand50f": 13,
+    "rand75a": 12,
+    "rand75b": 12,
+    "rand75c": 12,
+    "rand75d": 12,
+    "rand100a": 14,
+    "rand100b": 15,
+    "rand100c": 14,
+    "rand100d": 15,
+    "rand100e": 21,
+    "rand100f": 23,
+    "rand150a": 17,
+    "rand150b": 18,
 }
 
 # ---------------------------------------------------------------------------

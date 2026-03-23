@@ -20,23 +20,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from scientist import SCIENTIST_DIR, discover_problems
+
 DEFAULT_MODEL = "opus"
 DEFAULT_STUDIES = 5
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
 ALLOWED_TOOLS = "Read,Edit,Write,Bash"
 SUPERVISOR_PROMPT = "Read and follow supervisor/method.md"
-SCIENTIST_DIR = Path("scientist")
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
-
-
-def discover_problems():
-    """Auto-discover problem directories under scientist/."""
-    return sorted(
-        d.name for d in SCIENTIST_DIR.iterdir()
-        if d.is_dir() and (d / "program.md").exists()
-    )
 
 
 def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
@@ -86,7 +79,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
         log_file = log_dir / f"study.jsonl"
         try:
             with open(log_file, "w") as f:
-                subprocess.run(
+                result = subprocess.run(
                     claude_cmd,
                     input=SUPERVISOR_PROMPT,
                     text=True,
@@ -94,6 +87,8 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
                     stderr=sys.stderr,
                     timeout=study_timeout,
                 )
+            if result.returncode != 0:
+                print(f"=== Study {i} failed (exit code {result.returncode}) ===", file=sys.stderr)
         except subprocess.TimeoutExpired:
             print(f"=== Study {i} timed out after {study_timeout}s, skipping ===", file=sys.stderr)
 

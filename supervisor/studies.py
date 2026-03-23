@@ -21,24 +21,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+from scientist import SCIENTIST_DIR, discover_problems
 from supervisor.evaluate import analyse_and_save
 
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TRIALS = 20
 DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
-SCIENTIST_DIR = Path("scientist")
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
-
-
-def discover_problems():
-    """Auto-discover problem directories under scientist/."""
-    return sorted(
-        d.name for d in SCIENTIST_DIR.iterdir()
-        if d.is_dir() and (d / "program.md").exists()
-    )
 
 
 def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout):
@@ -56,7 +48,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
     log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
     try:
         with open(log_file, "w") as f:
-            subprocess.run(
+            result = subprocess.run(
                 claude_cmd,
                 input=prompt,
                 text=True,
@@ -64,6 +56,9 @@ def run_trial(problem, trial_num, timestamp, log_dir, claude_cmd, trial_timeout)
                 stderr=sys.stderr,
                 timeout=trial_timeout,
             )
+        if result.returncode != 0:
+            print(f"=== {problem} trial {trial_num} failed (exit code {result.returncode}) ===", file=sys.stderr)
+            return problem, trial_num, False
         return problem, trial_num, True
     except subprocess.TimeoutExpired:
         print(f"=== {problem} trial {trial_num} timed out after {trial_timeout}s, skipping ===", file=sys.stderr)
