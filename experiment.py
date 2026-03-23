@@ -13,6 +13,7 @@
 #   uv run experiment --model sonnet           # use sonnet for Supervisor
 
 import argparse
+import os
 import shutil
 import signal
 import subprocess
@@ -21,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 from scientist import SCIENTIST_DIR, discover_problems
+from reset import soft_reset
 from supervisor.evaluate import analyse_and_save
 from supervisor.studies import run_study
 
@@ -37,23 +39,30 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 def run_supervisor(claude_cmd, prompt, log_file, timeout):
     """Run a Supervisor claude -p call, logging to log_file."""
-    try:
-        with open(log_file, "w") as f:
-            result = subprocess.run(
-                claude_cmd,
-                input=prompt,
-                text=True,
-                stdout=f,
-                stderr=sys.stderr,
-                timeout=timeout,
-            )
-        if result.returncode != 0:
-            print(f"  Supervisor call failed (exit code {result.returncode})", file=sys.stderr)
+    with open(log_file, "w") as f:
+        proc = subprocess.Popen(
+            claude_cmd,
+            stdin=subprocess.PIPE,
+            stdout=f,
+            stderr=sys.stderr,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            proc.communicate(input=prompt, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            print(f"  Supervisor call timed out after {timeout}s, killing process group", file=sys.stderr)
+            os.killpg(proc.pid, signal.SIGTERM)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
             return False
-        return True
-    except subprocess.TimeoutExpired:
-        print(f"  Supervisor call timed out after {timeout}s", file=sys.stderr)
+    if proc.returncode != 0:
+        print(f"  Supervisor call failed (exit code {proc.returncode})", file=sys.stderr)
         return False
+    return True
 
 
 def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
@@ -73,59 +82,64 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
         study_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         print(f"=== Study {i} / {num_studies} ({study_timestamp}) ===", file=sys.stderr)
 
-        # Archive current scientist/ state
-        archive_dir = Path("archive") / study_timestamp
-        shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
-        print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
-
-        # Reset each problem's train.py to baseline and delete ephemeral results
-        for problem in problems:
-            problem_dir = SCIENTIST_DIR / problem
-            original = problem_dir / "archive" / "original.py"
-            train = problem_dir / "train.py"
-            if original.exists():
-                shutil.copy(original, train)
-            results = problem_dir / "results.tsv"
-            results.unlink(missing_ok=True)
-
-        # Git commit current state
-        subprocess.run(["git", "add", "-A"], check=False)
-        subprocess.run(
-            ["git", "commit", "-m", f"archive study {study_timestamp}"],
-            check=False,
-        )
-
-        log_dir = Path("logs") / study_timestamp
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Phase 1: Pre-study Supervisor call
-        print(f"  Phase 1: Pre-study planning", file=sys.stderr)
-        run_supervisor(claude_cmd, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout)
-
-        # Phase 2: Run the study (directly, no Bash timeout issues)
-        print(f"  Phase 2: Running trials", file=sys.stderr)
-        run_study()
-
-        # Evaluate
         try:
-            all_stats = analyse_and_save(timestamp=study_timestamp)
-            if all_stats and "_aggregate" in all_stats:
-                agg = all_stats["_aggregate"]
-                print(f"  Aggregate: improvement={agg['total_improvement']:+.6f}, "
-                      f"velocity={agg['overall_velocity']:+.6f}/trial", file=sys.stderr)
-                for problem in problems:
-                    if problem in all_stats:
-                        s = all_stats[problem]
-                        print(f"  {problem}: improvement={s['total_improvement']:+.6f}, "
-                              f"velocity={s['overall_velocity']:+.6f}/trial", file=sys.stderr)
-            else:
-                print(f"  Study result: too few trials to analyse", file=sys.stderr)
-        except Exception as e:
-            print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
+            # Archive current scientist/ state
+            archive_dir = Path("archive") / study_timestamp
+            shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
+            print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
 
-        # Phase 3: Post-study Supervisor call
-        print(f"  Phase 3: Post-study review", file=sys.stderr)
-        run_supervisor(claude_cmd, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout)
+            # Reset each problem's train.py to baseline and delete ephemeral results
+            soft_reset(problems)
+
+            # Git commit current state
+            result = subprocess.run(["git", "add", "-A"], capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"  Warning: git add failed: {result.stderr.strip()}", file=sys.stderr)
+            result = subprocess.run(
+                ["git", "commit", "-m", f"archive study {study_timestamp}"],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0 and "nothing to commit" not in result.stdout:
+                print(f"  Warning: git commit failed: {result.stderr.strip()}", file=sys.stderr)
+
+            log_dir = Path("logs") / study_timestamp
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+            # Phase 1: Pre-study Supervisor call
+            print(f"  Phase 1: Pre-study planning", file=sys.stderr)
+            if not run_supervisor(claude_cmd, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout):
+                print(f"  Pre-study supervisor failed, skipping study {i}", file=sys.stderr)
+                continue
+
+            # Phase 2: Run the study (directly, no Bash timeout issues)
+            print(f"  Phase 2: Running trials", file=sys.stderr)
+            run_study()
+
+            # Evaluate
+            try:
+                all_stats = analyse_and_save(timestamp=study_timestamp)
+                if all_stats and "_aggregate" in all_stats:
+                    agg = all_stats["_aggregate"]
+                    print(f"  Aggregate: improvement={agg['total_improvement']:+.6f}, "
+                          f"velocity={agg['overall_velocity']:+.6f}/trial", file=sys.stderr)
+                    for problem in problems:
+                        if problem in all_stats:
+                            s = all_stats[problem]
+                            print(f"  {problem}: improvement={s['total_improvement']:+.6f}, "
+                                  f"velocity={s['overall_velocity']:+.6f}/trial", file=sys.stderr)
+                else:
+                    print(f"  Study result: too few trials to analyse", file=sys.stderr)
+            except Exception as e:
+                print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
+
+            # Phase 3: Post-study Supervisor call
+            print(f"  Phase 3: Post-study review", file=sys.stderr)
+            if not run_supervisor(claude_cmd, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout):
+                print(f"  Warning: post-study supervisor failed (study results are saved)", file=sys.stderr)
+
+        except Exception as e:
+            print(f"  Study {i} failed with unexpected error: {e}", file=sys.stderr)
+            continue
 
 
 def main():

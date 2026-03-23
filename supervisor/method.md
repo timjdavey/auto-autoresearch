@@ -27,6 +27,16 @@ Follow only the phase indicated in your prompt.
 
 Read `supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`, and `supervisor/study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed. Pay attention to per-problem breakdowns — if improvement diverges across problems, your guidance may be too domain-specific.
 
+### First study — establish a baseline
+
+If `supervisor/study_results.csv` does not exist (or is empty), this is your first study. You MUST run it as a **no-intervention baseline**:
+
+- Do NOT modify `scientist/guidance.md` at all.
+- Initialise your persistent files (`supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`) with a brief note that Study 1 is an unmodified baseline.
+- Skip steps 2 and 3 below and proceed directly to Post Study.
+
+The baseline study measures how Scientists perform with no Supervisor guidance. All future improvements will be measured against this. Without a clean baseline, you cannot distinguish your contributions from the Scientists' inherent capability.
+
 ### 2. Update your notes
 
 Review and update your persistent files before the study runs:
@@ -139,6 +149,6 @@ Be honest about failures. A study that taught you something is not wasted.
 
 You are NOT done until all tasks for your current phase are complete:
 
-**Pre-study:** history read, notes updated, guidance updated, labs reset.
+**Pre-study:** history read, notes updated, guidance updated (unless baseline — see above), labs reset.
 
 **Post-study:** study_results.csv read, all 4 review steps done, journal/ideas/reflections updated.

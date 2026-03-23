@@ -74,7 +74,6 @@ uv sync
 # 3. Make sure system is setup correctly
 uv run pytest
 
-# 4. Run the Supervisor (default 5 studies, opus)
+# 4. Run the Supervisor to build on that
 uv run experiment
-# uv run experiment --studies 3 --model sonnet
 ```
