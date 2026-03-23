@@ -300,21 +300,59 @@ def benchmark(solve_fn) -> dict:
 # ---------------------------------------------------------------------------
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
-RESULT_FIELDS = ["timestamp", "avg_improvement", "training_time"]
+
+# Per-instance columns for each QUICK_INSTANCE (rand30a, rand75a, rand150a)
+_INSTANCE_NAMES = list(QUICK_INSTANCES.keys())
+RESULT_FIELDS = (
+    ["timestamp", "status", "avg_improvement", "training_time"]
+    + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("colours", "improvement", "time")]
+    + ["notes"]
+)
 
 
 def log_result(train_results):
-    """Append a stable result record to scientist/results.tsv."""
+    """Append a result record with per-instance detail to results.tsv."""
     write_header = not os.path.exists(RESULTS_LOG_PATH)
+
+    # Determine status and collect error notes
+    notes = []
+    any_failed = False
+    for name in _INSTANCE_NAMES:
+        inst = train_results.get(name)
+        if isinstance(inst, dict) and not inst.get("valid", True):
+            any_failed = True
+            notes.append(f"{name}: {inst.get('error', 'unknown')}")
+    status = "solver_error" if any_failed else "ok"
+
+    row = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "status": status,
+        "avg_improvement": train_results.get("avg_improvement"),
+        "training_time": train_results.get("total_time"),
+        "notes": "; ".join(notes),
+    }
+
+    # Per-instance detail
+    for name in _INSTANCE_NAMES:
+        inst = train_results.get(name)
+        if isinstance(inst, dict) and inst.get("valid"):
+            row[f"{name}_colours"] = inst.get("n_colours")
+            row[f"{name}_improvement"] = round(inst["improvement"], 6) if "improvement" in inst else ""
+            row[f"{name}_time"] = inst.get("time")
+        elif isinstance(inst, dict):
+            row[f"{name}_colours"] = "FAIL"
+            row[f"{name}_improvement"] = ""
+            row[f"{name}_time"] = round(inst.get("time", 0), 3)
+        else:
+            row[f"{name}_colours"] = ""
+            row[f"{name}_improvement"] = ""
+            row[f"{name}_time"] = ""
+
     with open(RESULTS_LOG_PATH, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=RESULT_FIELDS, delimiter="\t")
         if write_header:
             writer.writeheader()
-        writer.writerow({
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "avg_improvement": train_results.get("avg_improvement"),
-            "training_time": train_results.get("total_time"),
-        })
+        writer.writerow(row)
 
 
 if __name__ == "__main__":

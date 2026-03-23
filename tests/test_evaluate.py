@@ -129,6 +129,62 @@ class TestLoadResults(unittest.TestCase):
         finally:
             os.unlink(tmp_path)
 
+    def test_skips_scientist_timeout_rows(self):
+        tsv_content = (
+            "timestamp\tstatus\tavg_improvement\ttraining_time\tnotes\n"
+            "2026-01-01T00:00:00\tok\t0.05\t1.0\t\n"
+            "2026-01-01T00:01:00\tscientist_timeout\t\t600\tScientist process killed after 600s\n"
+            "2026-01-01T00:02:00\tok\t0.10\t2.0\t\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write(tsv_content)
+            f.flush()
+            tmp_path = f.name
+        try:
+            rows = load_results(tmp_path)
+            self.assertEqual(len(rows), 2)
+            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
+            self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
+        finally:
+            os.unlink(tmp_path)
+
+    def test_skips_legacy_timeout_string(self):
+        tsv_content = (
+            "timestamp\tavg_improvement\ttraining_time\n"
+            "2026-01-01T00:00:00\t0.05\t1.0\n"
+            "2026-01-01T00:01:00\tTIMEOUT after 600s\t600\n"
+            "2026-01-01T00:02:00\t0.10\t2.0\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write(tsv_content)
+            f.flush()
+            tmp_path = f.name
+        try:
+            rows = load_results(tmp_path)
+            self.assertEqual(len(rows), 2)
+            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
+            self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
+        finally:
+            os.unlink(tmp_path)
+
+    def test_loads_new_format_with_extra_columns(self):
+        tsv_content = (
+            "timestamp\tstatus\tavg_improvement\ttraining_time\trand30a_colours\trand30a_improvement\tnotes\n"
+            "2026-01-01T00:00:00\tok\t0.25\t79.0\t4\t0.2\t\n"
+            "2026-01-01T00:01:00\tsolver_error\t-10.0\t80.0\tFAIL\t\trand30a: timeout\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write(tsv_content)
+            f.flush()
+            tmp_path = f.name
+        try:
+            rows = load_results(tmp_path)
+            self.assertEqual(len(rows), 2)
+            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.25)
+            self.assertAlmostEqual(rows[1]["avg_improvement"], -10.0)
+        finally:
+            os.unlink(tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # analyse_and_save

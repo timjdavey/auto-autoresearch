@@ -17,7 +17,11 @@ from scientist import SCIENTIST_DIR, discover_problems
 
 
 def load_results(results_path=None):
-    """Load all rows from a results.tsv, returning list of dicts with floats."""
+    """Load rows from a results.tsv, returning list of dicts with floats.
+
+    Rows with status='scientist_timeout' are skipped (no valid metric).
+    Rows where avg_improvement cannot be parsed as float are also skipped.
+    """
     if results_path is None:
         # Legacy fallback — shouldn't be needed
         results_path = SCIENTIST_DIR / "results.tsv"
@@ -26,10 +30,17 @@ def load_results(results_path=None):
     with open(results_path, newline="") as f:
         rows = []
         for row in csv.DictReader(f, delimiter="\t"):
+            # Skip scientist timeout rows — no valid metric
+            if row.get("status") == "scientist_timeout":
+                continue
+            try:
+                avg_improvement = float(row["avg_improvement"])
+            except (ValueError, TypeError):
+                continue  # skip unparseable rows (e.g. legacy "TIMEOUT after 600s")
             rows.append({
                 "timestamp": row["timestamp"],
-                "avg_improvement": float(row["avg_improvement"]),
-                "training_time": float(row["training_time"]),
+                "avg_improvement": avg_improvement,
+                "training_time": float(row.get("training_time", 0)),
             })
     return rows
 
