@@ -78,13 +78,9 @@ Trial metrics are written automatically to `scientist/{problem}/results.tsv` by 
 
 ### Evaluating a study
 
-When running under an experiment, study evaluation is automatic — after each study completes, `supervisor/evaluate.py` analyses each problem's `results.tsv` and appends summary rows to `supervisor/study_results.csv`. Each study produces one row per problem plus an `_aggregate` row. You can read `supervisor/study_results.csv` to see cross-study trends (total improvement, velocity, tailing off) both per-problem and in aggregate.
+`uv run studies` automatically runs `supervisor/evaluate.py` when it finishes, which analyses each problem's `results.tsv` and appends summary rows to `supervisor/study_results.csv`. Each study produces one row per problem plus an `_aggregate` row. So when `uv run studies` returns, `supervisor/study_results.csv` is already up to date — **read it now and proceed to the post-study review below.**
 
-For standalone studies, run manually:
-```
-uv run evaluate
-```
-This reads each problem's `results.tsv` and reports total improvement, improvement per trial, and final-20% velocity (to detect tailing off) for each problem.
+You can also read `supervisor/study_results.csv` to see cross-study trends (total improvement, velocity, tailing off) both per-problem and in aggregate.
 
 ### Post-study review
 
@@ -133,3 +129,11 @@ Update your persistent files with what you learned:
 **`supervisor/reflections.md`** — Ideas to improve your own process. Reflect on your own process: did your planning approach work well this study? Would you approach the next study differently?
 
 Be honest about failures. A study that taught you something is not wasted.
+
+## Before you finish
+
+You are NOT done until all of these are complete:
+- Post-study review done (all 4 steps above)
+- `supervisor/journal.md` updated with results, analysis, and learnings
+- `supervisor/ideas.md` updated based on findings
+- `supervisor/reflections.md` updated with post-study reflection

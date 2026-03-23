@@ -34,8 +34,6 @@ signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
 
 def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
     """Run an experiment of sequential studies."""
-    from supervisor.evaluate import analyse_and_save
-
     claude_cmd = [
         "claude", "-p",
         "--verbose",
@@ -91,24 +89,6 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
                 print(f"=== Study {i} failed (exit code {result.returncode}) ===", file=sys.stderr)
         except subprocess.TimeoutExpired:
             print(f"=== Study {i} timed out after {study_timeout}s, skipping ===", file=sys.stderr)
-
-        # Evaluate study and persist results
-        try:
-            all_stats = analyse_and_save(timestamp=study_timestamp)
-            if all_stats and "_aggregate" in all_stats:
-                agg = all_stats["_aggregate"]
-                print(f"  Aggregate: improvement={agg['total_improvement']:+.6f}, "
-                      f"velocity={agg['overall_velocity']:+.6f}/trial", file=sys.stderr)
-                for problem in problems:
-                    if problem in all_stats:
-                        s = all_stats[problem]
-                        print(f"  {problem}: improvement={s['total_improvement']:+.6f}, "
-                              f"velocity={s['overall_velocity']:+.6f}/trial", file=sys.stderr)
-            else:
-                print(f"  Study result: too few trials to analyse", file=sys.stderr)
-        except Exception as e:
-            print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
-
 
 def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")

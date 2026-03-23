@@ -25,7 +25,7 @@ from scientist import SCIENTIST_DIR, discover_problems
 from supervisor.evaluate import analyse_and_save
 
 DEFAULT_MODEL = "sonnet"
-DEFAULT_TRIALS = 20
+DEFAULT_TRIALS = 5
 DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 
