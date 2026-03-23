@@ -4,7 +4,7 @@ Reads the stable log at scientist/{problem}/results.tsv (written by prepare.py)
 for each discovered problem.
 
 Usage:
-    python evaluate.py
+    uv run evaluate
 """
 
 import csv
@@ -162,7 +162,7 @@ def analyse_and_save(timestamp=None, output_path=None):
     return all_stats
 
 
-if __name__ == "__main__":
+def main():
     problems = discover_problems()
     if not problems:
         print("No problems found in scientist/.")
@@ -187,3 +187,7 @@ if __name__ == "__main__":
     if not any_results:
         print("No problems had enough results for analysis.")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

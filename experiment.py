@@ -7,10 +7,10 @@
 # Runs an experiment: one or more Supervisor studies.
 #
 # Usage:
-#   python experiment.py                       # 5 studies, opus (default)
-#   python experiment.py --studies 3           # 3 studies
-#   python experiment.py --timeout 7200        # 2-hour per-study timeout
-#   python experiment.py --model sonnet        # use sonnet for Supervisor
+#   uv run experiment                          # 5 studies, opus (default)
+#   uv run experiment --studies 3              # 3 studies
+#   uv run experiment --timeout 7200           # 2-hour per-study timeout
+#   uv run experiment --model sonnet           # use sonnet for Supervisor
 
 import argparse
 import shutil
@@ -115,7 +115,7 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
             print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
     parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES, help=f"Number of studies (default: {DEFAULT_STUDIES})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
@@ -123,3 +123,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model)
+
+
+if __name__ == "__main__":
+    main()

@@ -7,10 +7,10 @@
 # Runs a study: one or more Scientist invocations across all problems.
 #
 # Usage:
-#   python studies.py                       # 100 trials, sonnet (default)
-#   python studies.py --trials 5            # 5 fresh-context trials
-#   python studies.py --timeout 300         # 5-minute per-trial timeout
-#   python studies.py --opus                # run with opus (for testing)
+#   uv run studies                            # 20 trials, sonnet (default)
+#   uv run studies --trials 5                 # 5 fresh-context trials
+#   uv run studies --timeout 300              # 5-minute per-trial timeout
+#   uv run studies --opus                     # run with opus (for testing)
 
 import argparse
 import shutil
@@ -24,7 +24,7 @@ from pathlib import Path
 from supervisor.evaluate import analyse_and_save
 
 DEFAULT_MODEL = "sonnet"
-DEFAULT_TRIALS = 100
+DEFAULT_TRIALS = 20
 DEFAULT_TIMEOUT = 300
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 SCIENTIST_DIR = Path("scientist")
@@ -109,7 +109,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
     return log_dir
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Run a study: one or more Scientist invocations.")
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help=f"Number of trials (default: {DEFAULT_TRIALS})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Per-trial timeout in seconds (default: {DEFAULT_TIMEOUT})")
@@ -120,3 +120,7 @@ if __name__ == "__main__":
     model = "opus" if args.opus else args.model
     log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model)
     print(f"Logs: {log_dir}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
