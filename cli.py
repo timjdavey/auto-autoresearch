@@ -1,4 +1,4 @@
-"""CLI command builder — abstracts Claude vs Gemini CLI differences."""
+"""CLI command builder — abstracts Claude vs Codex CLI differences."""
 
 # Model short-name → (cli_binary, full_model_id)
 MODELS = {
@@ -6,9 +6,10 @@ MODELS = {
     "opus": ("claude", "opus"),
     "sonnet": ("claude", "sonnet"),
     "haiku": ("claude", "haiku"),
-    # Gemini models
-    "pro": ("gemini", "gemini-2.5-pro"),
-    "flash": ("gemini", "gemini-2.5-flash"),
+    # Codex models
+    "codex": ("codex", "gpt-5.4-mini"),
+    "codex-mini": ("codex", "gpt-5.4-mini"),
+    "codex-full": ("codex", "gpt-5.4"),
 }
 
 
@@ -16,13 +17,13 @@ def resolve_model(name):
     """Return (cli_binary, model_id) for a model name.
 
     Known short names are looked up in MODELS.
-    Unknown names starting with 'gemini' use the gemini CLI.
+    Unknown names starting with 'gpt' use the codex CLI.
     Everything else falls through to the claude CLI.
     """
     if name in MODELS:
         return MODELS[name]
-    if name.startswith("gemini"):
-        return ("gemini", name)
+    if name.startswith("gpt"):
+        return ("codex", name)
     return ("claude", name)
 
 
@@ -31,17 +32,16 @@ def build_cmd(model, prompt, allowed_tools=None):
 
     Returns (cmd_list, stdin_input):
       - Claude: prompt piped via stdin  → stdin_input = prompt
-      - Gemini: prompt as -p arg       → stdin_input = None
+      - Codex:  prompt as positional arg → stdin_input = None
     """
     cli, model_id = resolve_model(model)
 
-    if cli == "gemini":
+    if cli == "codex":
         cmd = [
-            "gemini",
-            "-p", prompt,
+            "codex", "exec", prompt,
             "--model", model_id,
-            "--output-format", "stream-json",
-            "--yolo",
+            "--json",
+            "--full-auto",
         ]
         return cmd, None
     else:

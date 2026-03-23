@@ -12,7 +12,7 @@
 #   uv run experiment --timeout 7200           # 2-hour per-study timeout
 #   uv run experiment --trials 5                # 5 trials per study
 #   uv run experiment --model sonnet           # use sonnet for Supervisor
-#   uv run experiment --model pro              # use gemini pro for Supervisor
+#   uv run experiment --model codex-full       # use codex (gpt-5.4) for Supervisor
 
 import argparse
 import os
@@ -145,7 +145,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
     parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES, help=f"Number of studies (default: {DEFAULT_STUDIES})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
-    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use: opus/sonnet/haiku (Claude) or pro/flash (Gemini) (default: {DEFAULT_MODEL})")
+    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use: opus/sonnet/haiku (Claude) or codex/codex-mini/codex-full (Codex) (default: {DEFAULT_MODEL})")
     parser.add_argument("--trials", type=int, default=None, help="Number of trials per study (default: study default)")
     parser.add_argument("--sequential", action="store_true", default=True, help="Run problems sequentially (default, avoids rate limits)")
     parser.add_argument("--parallel", action="store_true", help="Run problems in parallel")
