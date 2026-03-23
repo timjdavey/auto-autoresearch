@@ -56,18 +56,21 @@ We chose these as we want:
 - Indefinite: optimization landscape for high discoverability variance
 
 
-## Commands
-
-Run a full experiment (default 5 studies, opus):
-```
-uv run experiment
-uv run experiment --studies 3 --model sonnet
-```
-
 ## Quick start
 
-Run tests:
-```
-uv run pytest
-```
+Requires claude:
 
+```bash
+# 1. Install uv project manager (if you don't already have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Install dependencies
+uv sync
+
+# 3. Make sure system is setup correctly
+uv run pytest
+
+# 4. Run the Supervisor (default 5 studies, opus)
+uv run experiment
+# uv run experiment --studies 3 --model sonnet
+```
