@@ -8,8 +8,14 @@ Strategies, hypotheses, and observations about how the scientist approaches disc
 
 ### Untested ideas
 
+- Memory: each new trial gets a new Scientist, so what files should the Scientist have to maintain pass it's thinking on most efficiently and effectively?
+- Reflection: what kinds of reflection steps lead to the best results? Create hypothesis, then test, spend time planning up front or use budget reflecting after?
+- Structure: does storing hypothesis, analysis, conclusion, abstract make a difference compared to freeform notes?
 - Perceived trial budget: inflate count to encourage risk-taking, or deflate to force concentrated bets
 - Note verbosity: more verbose for richer reasoning vs more concise to fit more history in context
+- Motivation: be more aggressive with threats about failure vs motivational, supportive and kind
+- Directive: let it design it's own method vs being more perspective and micromanaging
+- Ranking: best ways to rank ideas?
 - Optimisation mindset: "explore and fail lots" to avoid local maxima vs "always try to beat your last score" for momentum
 - Planning vs opportunism: structured upfront planning vs staying open to serendipity
 - Explore/exploit phasing: explicit exploration phase then exploit — but what split?
@@ -17,7 +23,8 @@ Strategies, hypotheses, and observations about how the scientist approaches disc
 - Review strategy: read all best options then review for gems vs ignore prior work to avoid anchoring
 - Failure review: re-run previous failures to check for non-deterministic bad luck
 - Search at scale: what strategies work when trial counts get large?
-- Memory scratchpad: give the Scientist a scratchpad to persist thinking across trials
+- Missing: record what information they would have liked to have had?
+- Multi-test: try multiple ideas at once or stay scientific & only edit one idea at a time?
 
 ### Proven strategies
 

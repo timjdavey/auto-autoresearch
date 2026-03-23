@@ -8,69 +8,55 @@ Here we treat autoresearch itself as one of those problems. How to store and ana
 
 ## How it works
 
-Here we break this system into two:
-* First we have multiple **Scientist** agents who run the standard autoresearch cycle (editing `train.py`).
-* Then we layer a **Supervisor** on top to tweak the environment (i.e. `program.md`)
+There are two layers to the system:
+* an inner **Scientist** agent runs the standard autoresearch cycle (editing `train.py`).
+* an outer **Supervisor** that tweaks the Scientists environment (effectively `program.md`).
 
-The process is:
-* The Supervisor set up the "lab" for the scientist. Giving it `guidance.md` on _how_ to run the experiment (e.g. plan, do self-reflection, where to store memories etc).
-* Very early we found the Supervisor to be a horendous micro-manager, so to combat this (and make sure the guidance was reasonably adaptable), we've set up three Scientists all working in parallel on different problems. The Supervisor then has to give exactly the same guidance to all, making sure it is generic and problem agnostic.
-* Each scientist has a set number of **trials** to complete it's **study** and get the best possible results. The Supervisor reflects, learns and adapts the guidance.
-* Then a new **campaign** of each study run in a loop.
+## Design choices
+
+* **Supervisor over self-reflection**. Getting the scientist to edit it's own environment can too easily lead it to game the output; or worse, poor process choices could ruin it's entire future tradjectory. So you need an outer loop to verify the modifications work.
+* **Multi-problem**. We found early on that the Supervisor wants to micro-manage and work as a Scientist, so we introduced a set of parallel Scientists working on different problems (not nanochat). This forces the Supervisor to work at a higher level. It also helps introduce a bit of replication robustness.
+* **CPU over GPU**. Since we're not directly optimising nanochat here and instead are looking for universal principals we've opted for CPU friendly problems. See below.
+* **Inner improvement only**. For the same reasons as above, we allow the Supervisor to only do a minimal amount of self-improvement via self reflection in the `/supervisor/journal.md` file.
+* **Filesystem over git**. We've opted for storing previous iterations as files over git as it allows us to slightly easier manage what previous experiments are considered (as this is a multi-layered inception style system of iterations).
+* **Invocation**. Scientists are explicitly called in parallel via a CLI as this was more robust than trying to get the Supervisor to spin up multiple parallel sub-agents. Similarly we use claude here because that's our subscription, but could add codex on request.
 
 
 ## Project structure
 
-We've grouped the files each agent uses by name
-
-* `scientist/train.py` contains a `solve` function which the **Scientist** edits.
-* `scientist/program.md` instructions for the **Scientist** to follow. This is edited by the **Supervisor**.
-* `scientist/` will contain other files and tools e.g. MEMORY.md, dbsqlite, graph databases etc... Which the **Supervisor** will optimise.
-* `scientist/prepare.py` evaluation framework. **Not modified (even by Supervisor to prevent gaming)**.
-* `supervisor/method.md` instructions for the **Supervisor** to follow. **Not modified by Supervisor or Scientist.**
-* `supervisor/study.py` runs a study. Supports `--trials N` (default 100) and `--timeout S` (default 600s per trial). **Not modified by Supervisor or Scientist.**
+```
+experiment.py       - Starts the supervisor loop (human-only edit)
+supervisor/
+    studies.py      - runs a round of scientist studies (human-only edit)
+    evaluate.py     - evaluates a study (human-only edit)
+    method.md       - the program.md for the supervisor (human-only edit)
+    journal.md      - a scratchpad of ideas and memories (supervisor views & edits)
+scientist/
+    guidance.md     - on how to run the scientific process (viewed by all scientists, edited by supervisor)
+    {problem}/      - subdirectories with autoresearch train.py, prepare.py, program.md, etc.
+```
 
 
 ## Commands
 
 To kick off the main Supervisor loop:
 ```
-uv run human/campaign.py
+uv run experiment.py
 ```
 
 To verify everything is working, run a short study (1 trial, sonnet by default):
 ```
-uv run supervisor/study.py --trials 1
+uv run supervisor/studies.py --trials 1
 ```
 
 
-## Design choices
-
-* **Optimisation rather than nanochat.** Our goal here isn't to improve deep-learning, it's to improve learning-learning. So we've had to introduce multiple optimisation problems. These were chosen to be CPU friendly over GPUs for hardware convience.
-* **Inner improvement only.** In theory we should allow the Supervisor to incorporate the best studies into it's own learning process directly. But we want to avoid local optimas, so we'll only merge the best systems in periodically (for now). But it will do some self-improvement via self-reflection which gets stored in `/supervisor/journal.md`.
-* **Filesystem over git.** We've opted for storing previous iterations as files over git because some of the files / tools are poor at coping with diffs and allows us to be able to slightly easier manage what previous campaigns we merge into the master learning branch (given this is a multi-layered inception type study).
-* **Dependencies.** We introduced more tools than the original autoresearch, as we wanted the largest variance in discoverability & nuance in tooling to be tested, ((as we've seen with hardware)[https://blog.skypilot.co/scaling-autoresearch/]).
-* **Evaluation.** In the future we'll want to give the Supervisor control over `prepare.py`, to tinker with the loss_functions etc, but for now that's too easy to game.
-* **Invocation.** we've moved to calls to CLI as this was more reliable of a call then coaxing sub-agents.
-* **Claude.** we've used claude because that's our subscription of choice, but codex versions of the cli could be built if interest.
-
-
-
-## Inner experiment
-Criteria:
-- Cheap to evaluate
-- Can be run in a single python file (for now)
-- Hardware independant scalar metric
-- Indefinite optimization landscape
-- Existing benchmarks for comparison
-
-Candidates:
-- **TSP (traveling salesman)** (chosen)
-- SAT solvers
-- Sorting algorithms
-- Compression enwik8
+## Problem experiments
+Chosen problems:
+- Traveling salesman problem (TSP)
 - Graph colouring (DIMACS)
 
-Evaluation (two-tier):
-- **Training** (`avg_improvement`, higher is better): Evaluated against 3 random instances (fixed seeds, no known optima). Measures percentage improvement over a nearest-neighbour baseline. Random instances prevent the LLM from memorising solutions.
-- **Benchmark** (`avg_loss`, lower is better): Separately evaluated against 3 TSPLIB instances (berlin52, eil51, kroA100) with published optimal tour lengths. Measures percentage above optimal. Not part of the optimisation loop — provides an independent measure of progress against the TSP literature.
+We chose these as we want:
+- Cheap: to evaluate (CPU-friendly)
+- Context contained: Can be run in a single python file
+- Hardware independant: so scalar metric ideally not time based
+- Indefinite: optimization landscape for high discoverability variance

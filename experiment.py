@@ -4,13 +4,13 @@
 # Neither the Supervisor nor the Scientist should modify it.
 # ============================================================
 #
-# Runs a campaign: one or more Supervisor studies.
+# Runs an experiment: one or more Supervisor studies.
 #
 # Usage:
-#   python campaign.py                       # 5 studies, opus (default)
-#   python campaign.py --studies 3           # 3 studies
-#   python campaign.py --timeout 7200        # 2-hour per-study timeout
-#   python campaign.py --model sonnet        # use sonnet for Supervisor
+#   python experiment.py                       # 5 studies, opus (default)
+#   python experiment.py --studies 3           # 3 studies
+#   python experiment.py --timeout 7200        # 2-hour per-study timeout
+#   python experiment.py --model sonnet        # use sonnet for Supervisor
 
 import argparse
 import shutil
@@ -39,8 +39,8 @@ def discover_problems():
     )
 
 
-def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
-    """Run a campaign of sequential studies."""
+def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
+    """Run an experiment of sequential studies."""
     from supervisor.evaluate import analyse_and_save
 
     claude_cmd = [
@@ -116,10 +116,10 @@ def run_campaign(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOU
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run a campaign: one or more Supervisor studies.")
+    parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
     parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES, help=f"Number of studies (default: {DEFAULT_STUDIES})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Claude model to use (default: {DEFAULT_MODEL})")
     args = parser.parse_args()
 
-    run_campaign(num_studies=args.studies, study_timeout=args.timeout, model=args.model)
+    run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model)

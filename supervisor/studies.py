@@ -7,10 +7,10 @@
 # Runs a study: one or more Scientist invocations across all problems.
 #
 # Usage:
-#   python study.py                       # 100 trials, sonnet (default)
-#   python study.py --trials 5            # 5 fresh-context trials
-#   python study.py --timeout 300         # 5-minute per-trial timeout
-#   python study.py --opus                # run with opus (for testing)
+#   python studies.py                       # 100 trials, sonnet (default)
+#   python studies.py --trials 5            # 5 fresh-context trials
+#   python studies.py --timeout 300         # 5-minute per-trial timeout
+#   python studies.py --opus                # run with opus (for testing)
 
 import argparse
 import shutil
