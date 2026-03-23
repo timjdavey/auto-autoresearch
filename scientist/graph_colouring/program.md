@@ -27,5 +27,6 @@ A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes
 ## Constraints
 
 - **Time limit**: 30 seconds per `solve()` call.
+- **Trial timeout**: Your entire trial (reading, planning, editing, and running evaluation) must complete within **10 minutes**. If you exceed this, the trial is killed and counts as a failure.
 - **Single file**: All code in `train.py`. You may import from the standard library plus `numpy`, `scipy`, and `numba`.
 - **No hardcoding**: Your solver must work on arbitrary graphs. Do not detect which instance is being solved.
