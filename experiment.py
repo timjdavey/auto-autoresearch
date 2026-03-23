@@ -10,6 +10,7 @@
 #   uv run experiment                          # 20 studies, opus (default)
 #   uv run experiment --studies 3              # 3 studies
 #   uv run experiment --timeout 7200           # 2-hour per-study timeout
+#   uv run experiment --trials 5                # 5 trials per study
 #   uv run experiment --model sonnet           # use sonnet for Supervisor
 
 import argparse
@@ -65,7 +66,7 @@ def run_supervisor(claude_cmd, prompt, log_file, timeout):
     return True
 
 
-def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
+def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL, num_trials=None):
     """Run an experiment of sequential studies."""
     claude_cmd = [
         "claude", "-p",
@@ -113,7 +114,10 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
 
             # Phase 2: Run the study (directly, no Bash timeout issues)
             print(f"  Phase 2: Running trials", file=sys.stderr)
-            run_study()
+            study_kwargs = {}
+            if num_trials is not None:
+                study_kwargs["num_trials"] = num_trials
+            run_study(**study_kwargs)
 
             # Evaluate
             try:
@@ -147,9 +151,10 @@ def main():
     parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES, help=f"Number of studies (default: {DEFAULT_STUDIES})")
     parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT, help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Claude model to use (default: {DEFAULT_MODEL})")
+    parser.add_argument("--trials", type=int, default=None, help="Number of trials per study (default: study default)")
     args = parser.parse_args()
 
-    run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model)
+    run_experiment(num_studies=args.studies, study_timeout=args.timeout, model=args.model, num_trials=args.trials)
 
 
 if __name__ == "__main__":
