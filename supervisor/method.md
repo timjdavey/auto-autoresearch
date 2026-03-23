@@ -11,17 +11,17 @@ Simplicity, maintainability and portability are as important as the optimisation
 Likewise actively try improvements to the system which simplify the structure and give more control & freedom to the Scientist. They are currently running on Sonnet, but in the real world they'll likely be using a smarter model like Opus. Plus the frontier models are always getting smarter.
 
 
-## Resetting the lab before each study
+## Two-phase invocation
 
-Before starting each study, reset each problem's lab to a clean state:
+You are called twice per study by the experiment harness:
 
-1. **Delete ephemeral results** — remove `scientist/{problem}/results.tsv` for each problem if it exists
-2. **Reset the solver** — copy `scientist/{problem}/archive/original.py` to `scientist/{problem}/train.py` for each problem (restores the baseline)
-3. **Keep your improvements** — do NOT touch `scientist/guidance.md` (this carries your accumulated improvements forward) unless you intentionally want to roll it back.
+1. **PRE-STUDY phase** — your prompt ends with "PRE-STUDY phase only." Follow the Pre-study sections below, then stop. Do NOT run `uv run studies` — the harness runs the study for you after you finish.
+2. **POST-STUDY phase** — your prompt ends with "POST-STUDY phase only." The study has already run and `supervisor/study_results.csv` has been updated. Follow the Post-study sections below, then stop.
 
-This ensures each study starts from the same baseline solver, so improvement metrics are comparable across studies.
+Follow only the phase indicated in your prompt.
 
-## Pre-study planning
+
+## Pre-study phase
 
 ### 1. Read your history
 
@@ -29,24 +29,38 @@ Read `supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`
 
 ### 2. Update your notes
 
-Review and update your persistent files before running the study:
+Review and update your persistent files before the study runs:
 
 - **`supervisor/ideas.md`** — review and update your ideas for improving the scientists. Promote, demote, or add hypotheses based on what you've learned.
 - **`supervisor/reflections.md`** — reflect on your own process as a supervisor. What's working? What would you do differently?
 - **`supervisor/journal.md`** — note your study plan (what you intend to change and why).
 
-Then proceed to reset the labs and run the study.
+### 3. Update guidance
 
-## Running a study
+Make any changes to `scientist/guidance.md` based on your plan.
+
+### 4. Reset the labs
+
+Before the study runs, reset each problem's lab to a clean state:
+
+1. **Delete ephemeral results** — remove `scientist/{problem}/results.tsv` for each problem if it exists
+2. **Reset the solver** — copy `scientist/{problem}/archive/original.py` to `scientist/{problem}/train.py` for each problem (restores the baseline)
+3. **Keep your improvements** — do NOT touch `scientist/guidance.md` (this carries your accumulated improvements forward) unless you intentionally want to roll it back.
+
+This ensures each study starts from the same baseline solver, so improvement metrics are comparable across studies.
+
+Then stop — the harness will run the study and call you again for the post-study phase.
+
+
+## How the study works (for context)
 
 A single script `supervisor/studies.py` invokes Scientists across all problems in parallel with the prompt `Read and follow scientist/{problem}/program.md`.
 
-### `supervisor/studies.py`
-```
-uv run studies    # 20 trials, sonnet (default)
-```
-
 Each trial runs all problems in parallel. Each problem's Scientist is a fresh `claude -p` call. The Scientist starts from scratch every trial but reads `scientist/{problem}/results.tsv` and `scientist/{problem}/archive/` to learn from prior trials. If a trial exceeds `--timeout` seconds (default 300), it is killed and the study continues to the next trial.
+
+Trial metrics are written automatically to `scientist/{problem}/results.tsv` by each problem's `prepare.py` every time it runs. Code snapshots are preserved in `scientist/{problem}/archive/`.
+
+After the study completes, `supervisor/evaluate.py` analyses each problem's `results.tsv` and appends summary rows to `supervisor/study_results.csv`. Each study produces one row per problem plus an `_aggregate` row.
 
 ### What you can change
 - `scientist/guidance.md` — the shared research methodology guidance read by all Scientists
@@ -64,7 +78,7 @@ Each trial runs all problems in parallel. Each problem's Scientist is a fresh `c
 
 ### Persistent files
 
-A fresh Supervisor is invoked for each study, so make sure to write in them to carry forward what you've learned.
+A fresh Supervisor is invoked for each phase, so make sure to write in them to carry forward what you've learned.
 
 **`supervisor/journal.md`** — A chronological study log. One entry per study recording what changed, what happened, and what you learned.
 
@@ -72,21 +86,12 @@ A fresh Supervisor is invoked for each study, so make sure to write in them to c
 
 **`supervisor/reflections.md`** — Meta-process reflections on how you approach study planning, what's working about your own methodology, and what you'd tell your future self. Evolve the format as you learn what works.
 
-### Recording
 
-Trial metrics are written automatically to `scientist/{problem}/results.tsv` by each problem's `prepare.py` every time it runs. This stable log is used by `supervisor/evaluate.py` to assess Scientist progress after a study. Code snapshots are preserved in `scientist/{problem}/archive/`.
+## Post-study phase
 
-### Evaluating a study
+The study has completed and `supervisor/study_results.csv` has been updated. Read it now along with each problem's `results.tsv`. Then perform the following reviews.
 
-`uv run studies` automatically runs `supervisor/evaluate.py` when it finishes, which analyses each problem's `results.tsv` and appends summary rows to `supervisor/study_results.csv`. Each study produces one row per problem plus an `_aggregate` row. So when `uv run studies` returns, `supervisor/study_results.csv` is already up to date — **read it now and proceed to the post-study review below.**
-
-You can also read `supervisor/study_results.csv` to see cross-study trends (total improvement, velocity, tailing off) both per-problem and in aggregate.
-
-### Post-study review
-
-After evaluating a study, perform these reviews before starting the next study.
-
-#### 1. Quality audit
+### 1. Quality audit
 
 Review each problem's `results.tsv` for errors or signs the Scientists misunderstood their instructions:
 
@@ -95,7 +100,7 @@ Review each problem's `results.tsv` for errors or signs the Scientists misunders
 
 If you find errors, diagnose the root cause. Check the trial logs in `logs/` for more detail if needed. Then amend `scientist/guidance.md` to prevent the issue from recurring.
 
-#### 2. Cross-problem analysis
+### 2. Cross-problem analysis
 
 Compare per-problem results in `supervisor/study_results.csv`:
 
@@ -103,7 +108,7 @@ Compare per-problem results in `supervisor/study_results.csv`:
 - If improvement diverges significantly across problems, your guidance is likely too domain-specific. Step back and think about what general principle would help all problems.
 - Are there common patterns (e.g. all problems tailing off, or all improving steadily)?
 
-#### 3. Tooling & technique review
+### 3. Tooling & technique review
 
 Review each problem's `train.py` and evaluation results to assess whether the Scientists are making effective use of the tools and time budget available:
 
@@ -113,7 +118,7 @@ Review each problem's `train.py` and evaluation results to assess whether the Sc
 
 If the Scientists are underutilising available tools or techniques, update `scientist/guidance.md` to better guide them — but keep the guidance generic. Don't name specific algorithms for specific problems; instead guide the general approach (e.g. "always check whether you're using the full time budget before trying a different algorithm").
 
-#### 4. Study reflection
+### 4. Study reflection
 
 Update your persistent files with what you learned:
 
@@ -132,8 +137,8 @@ Be honest about failures. A study that taught you something is not wasted.
 
 ## Before you finish
 
-You are NOT done until all of these are complete:
-- Post-study review done (all 4 steps above)
-- `supervisor/journal.md` updated with results, analysis, and learnings
-- `supervisor/ideas.md` updated based on findings
-- `supervisor/reflections.md` updated with post-study reflection
+You are NOT done until all tasks for your current phase are complete:
+
+**Pre-study:** history read, notes updated, guidance updated, labs reset.
+
+**Post-study:** study_results.csv read, all 4 review steps done, journal/ideas/reflections updated.

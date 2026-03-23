@@ -21,15 +21,39 @@ from datetime import datetime
 from pathlib import Path
 
 from scientist import SCIENTIST_DIR, discover_problems
+from supervisor.evaluate import analyse_and_save
+from supervisor.studies import run_study
 
 DEFAULT_MODEL = "opus"
 DEFAULT_STUDIES = 20
 DEFAULT_STUDY_TIMEOUT = 36000  # 10 hours per study
 ALLOWED_TOOLS = "Read,Edit,Write,Bash"
-SUPERVISOR_PROMPT = "Read and follow supervisor/method.md"
+SUPERVISOR_PRE_PROMPT = "Read and follow supervisor/method.md — PRE-STUDY phase only."
+SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY phase only."
 
 # Immediate exit on Ctrl-C
 signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+
+
+def run_supervisor(claude_cmd, prompt, log_file, timeout):
+    """Run a Supervisor claude -p call, logging to log_file."""
+    try:
+        with open(log_file, "w") as f:
+            result = subprocess.run(
+                claude_cmd,
+                input=prompt,
+                text=True,
+                stdout=f,
+                stderr=sys.stderr,
+                timeout=timeout,
+            )
+        if result.returncode != 0:
+            print(f"  Supervisor call failed (exit code {result.returncode})", file=sys.stderr)
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        print(f"  Supervisor call timed out after {timeout}s", file=sys.stderr)
+        return False
 
 
 def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT, model=DEFAULT_MODEL):
@@ -71,24 +95,38 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
             check=False,
         )
 
-        # Run the Supervisor
         log_dir = Path("logs") / study_timestamp
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / f"study.jsonl"
+
+        # Phase 1: Pre-study Supervisor call
+        print(f"  Phase 1: Pre-study planning", file=sys.stderr)
+        run_supervisor(claude_cmd, SUPERVISOR_PRE_PROMPT, log_dir / "pre-study.jsonl", study_timeout)
+
+        # Phase 2: Run the study (directly, no Bash timeout issues)
+        print(f"  Phase 2: Running trials", file=sys.stderr)
+        run_study()
+
+        # Evaluate
         try:
-            with open(log_file, "w") as f:
-                result = subprocess.run(
-                    claude_cmd,
-                    input=SUPERVISOR_PROMPT,
-                    text=True,
-                    stdout=f,
-                    stderr=sys.stderr,
-                    timeout=study_timeout,
-                )
-            if result.returncode != 0:
-                print(f"=== Study {i} failed (exit code {result.returncode}) ===", file=sys.stderr)
-        except subprocess.TimeoutExpired:
-            print(f"=== Study {i} timed out after {study_timeout}s, skipping ===", file=sys.stderr)
+            all_stats = analyse_and_save(timestamp=study_timestamp)
+            if all_stats and "_aggregate" in all_stats:
+                agg = all_stats["_aggregate"]
+                print(f"  Aggregate: improvement={agg['total_improvement']:+.6f}, "
+                      f"velocity={agg['overall_velocity']:+.6f}/trial", file=sys.stderr)
+                for problem in problems:
+                    if problem in all_stats:
+                        s = all_stats[problem]
+                        print(f"  {problem}: improvement={s['total_improvement']:+.6f}, "
+                              f"velocity={s['overall_velocity']:+.6f}/trial", file=sys.stderr)
+            else:
+                print(f"  Study result: too few trials to analyse", file=sys.stderr)
+        except Exception as e:
+            print(f"  Warning: study evaluation failed: {e}", file=sys.stderr)
+
+        # Phase 3: Post-study Supervisor call
+        print(f"  Phase 3: Post-study review", file=sys.stderr)
+        run_supervisor(claude_cmd, SUPERVISOR_POST_PROMPT, log_dir / "post-study.jsonl", study_timeout)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
