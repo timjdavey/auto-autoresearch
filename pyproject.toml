@@ -18,6 +18,5 @@ include = ["experiment.py"]
 
 [project.scripts]
 experiment = "experiment:main"
-studies = "supervisor.studies:main"
 evaluate = "supervisor.evaluate:main"
 reset = "reset:main"

@@ -9,12 +9,16 @@ Usage:
 
 import csv
 import math
-import os
+import statistics
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from scientist import SCIENTIST_DIR, discover_problems
+
+# Crash penalties are -10.0 (set in each problem's prepare.py).
+# Anything at or below this threshold is treated as a crash, not a real result.
+CRASH_THRESHOLD = -1
 
 
 def load_results(results_path=None):
@@ -26,7 +30,7 @@ def load_results(results_path=None):
     if results_path is None:
         # Legacy fallback — shouldn't be needed
         results_path = SCIENTIST_DIR / "results.tsv"
-    if not os.path.exists(results_path):
+    if not Path(results_path).exists():
         return []
     with open(results_path, newline="") as f:
         rows = []
@@ -47,31 +51,59 @@ def load_results(results_path=None):
 
 
 def analyse(rows):
-    """Compute study metrics. Returns dict with analysis results."""
+    """Compute study metrics. Returns dict with analysis results, or None if < 2 rows."""
     n = len(rows)
+    if n < 2:
+        return None
+
     improvements = [r["avg_improvement"] for r in rows]
     first = improvements[0]
     last = improvements[-1]
     total_improvement = last - first
-    improvement_per_trial = total_improvement / n if n > 0 else 0.0
+    improvement_per_trial = total_improvement / n
 
-    # Best / worst (exclude crash penalties where avg_improvement < -1)
-    valid_improvements = [v for v in improvements if v > -1]
+    # Best / worst (exclude crash penalties)
+    valid_improvements = [v for v in improvements if v > CRASH_THRESHOLD]
     best_avg_improvement = max(valid_improvements) if valid_improvements else max(improvements)
     worst_avg_improvement = min(valid_improvements) if valid_improvements else min(improvements)
     best_trial = improvements.index(best_avg_improvement) + 1  # 1-indexed
 
     # Standard deviation
     if n >= 2 and valid_improvements:
-        mean = sum(valid_improvements) / len(valid_improvements)
-        variance = sum((v - mean) ** 2 for v in valid_improvements) / (len(valid_improvements) - 1)
+        mean_val = sum(valid_improvements) / len(valid_improvements)
+        variance = sum((v - mean_val) ** 2 for v in valid_improvements) / (len(valid_improvements) - 1)
         stdev_avg_improvement = math.sqrt(variance)
     else:
         stdev_avg_improvement = 0.0
 
-    # Error count (rows that were filtered out by load_results are already gone,
-    # but we can count crash penalties still present)
-    num_errors = sum(1 for v in improvements if v <= -1)
+    # Median (robust to crash outliers)
+    median_avg_improvement = statistics.median(valid_improvements) if valid_improvements else statistics.median(improvements)
+
+    # Error count and rate
+    num_errors = sum(1 for v in improvements if v <= CRASH_THRESHOLD)
+    error_rate = num_errors / n
+
+    # Progress consistency: new bests, plateaus, regressions
+    running_best = improvements[0]
+    num_new_bests = 1  # first trial is trivially a new best
+    current_plateau = 0
+    longest_plateau = 0
+    num_regressions = 0
+    for v in improvements[1:]:
+        if v > CRASH_THRESHOLD and v > running_best:
+            running_best = v
+            num_new_bests += 1
+            current_plateau = 0
+        else:
+            current_plateau += 1
+            longest_plateau = max(longest_plateau, current_plateau)
+        # Regression: non-crash trial drops >10% below running best
+        if v > CRASH_THRESHOLD and v < running_best * 0.9:
+            num_regressions += 1
+
+    # Training time
+    training_times = [r["training_time"] for r in rows]
+    avg_training_time = sum(training_times) / n
 
     # Final 20% velocity
     tail_start = max(1, n - max(1, n // 5))  # at least 1 trial in tail
@@ -80,7 +112,7 @@ def analyse(rows):
     tail_trials = len(tail)
     tail_velocity = tail_improvement / tail_trials if tail_trials > 0 else 0.0
 
-    # Overall velocity (excluding first trial which has no delta)
+    # Overall velocity
     overall_velocity = improvement_per_trial
 
     return {
@@ -90,10 +122,16 @@ def analyse(rows):
         "best_avg_improvement": best_avg_improvement,
         "worst_avg_improvement": worst_avg_improvement,
         "stdev_avg_improvement": stdev_avg_improvement,
+        "median_avg_improvement": median_avg_improvement,
         "best_trial": best_trial,
         "num_errors": num_errors,
+        "error_rate": error_rate,
+        "num_new_bests": num_new_bests,
+        "longest_plateau": longest_plateau,
+        "num_regressions": num_regressions,
         "total_improvement": total_improvement,
         "improvement_per_trial": improvement_per_trial,
+        "avg_training_time": avg_training_time,
         "tail_trials": tail_trials,
         "tail_velocity": tail_velocity,
         "overall_velocity": overall_velocity,
@@ -104,15 +142,21 @@ def analyse(rows):
 def print_report(stats, problem=None):
     """Print a human-readable summary."""
     prefix = f"[{problem}] " if problem else ""
-    print(f"{prefix}Trials: {stats['num_trials']}  (errors: {stats['num_errors']})")
-    print(f"{prefix}First avg_improvement: {stats['first_avg_improvement']:.6f}")
-    print(f"{prefix}Last  avg_improvement: {stats['last_avg_improvement']:.6f}")
-    print(f"{prefix}Best  avg_improvement: {stats['best_avg_improvement']:.6f}  (trial {stats['best_trial']})")
-    print(f"{prefix}Worst avg_improvement: {stats['worst_avg_improvement']:.6f}")
-    print(f"{prefix}Stdev avg_improvement: {stats['stdev_avg_improvement']:.6f}")
+    print(f"{prefix}Trials: {stats['num_trials']}  (errors: {stats['num_errors']}, rate: {stats['error_rate']:.0%})")
+    print(f"{prefix}First avg_improvement:  {stats['first_avg_improvement']:.6f}")
+    print(f"{prefix}Last  avg_improvement:  {stats['last_avg_improvement']:.6f}")
+    print(f"{prefix}Best  avg_improvement:  {stats['best_avg_improvement']:.6f}  (trial {stats['best_trial']})")
+    print(f"{prefix}Worst avg_improvement:  {stats['worst_avg_improvement']:.6f}")
+    print(f"{prefix}Median avg_improvement: {stats['median_avg_improvement']:.6f}")
+    print(f"{prefix}Stdev avg_improvement:  {stats['stdev_avg_improvement']:.6f}")
     print()
     print(f"{prefix}Total improvement:       {stats['total_improvement']:+.6f}")
     print(f"{prefix}Improvement per trial:   {stats['improvement_per_trial']:+.6f}")
+    print(f"{prefix}Avg training time:       {stats['avg_training_time']:.1f}s")
+    print()
+    print(f"{prefix}Progress: {stats['num_new_bests']} new bests, "
+          f"longest plateau: {stats['longest_plateau']}, "
+          f"regressions: {stats['num_regressions']}")
     print()
     print(f"{prefix}Final 20% ({stats['tail_trials']} trials):")
     print(f"{prefix}  Velocity: {stats['tail_velocity']:+.6f} per trial")
@@ -129,12 +173,15 @@ STUDY_FIELDS = [
     "timestamp", "problem", "num_trials",
     "first_avg_improvement", "last_avg_improvement",
     "best_avg_improvement", "worst_avg_improvement",
-    "stdev_avg_improvement", "best_trial", "num_errors",
+    "stdev_avg_improvement", "median_avg_improvement",
+    "best_trial", "num_errors", "error_rate",
+    "num_new_bests", "longest_plateau", "num_regressions",
     "total_improvement", "improvement_per_trial",
+    "avg_training_time",
     "tail_trials", "tail_velocity", "overall_velocity", "tailing_off",
 ]
 
-STUDY_RESULTS_PATH = os.path.join(os.path.dirname(__file__), "study_results.csv")
+STUDY_RESULTS_PATH = Path(__file__).parent / "study_results.csv"
 
 
 def analyse_and_save(timestamp=None, output_path=None):
@@ -165,8 +212,11 @@ def analyse_and_save(timestamp=None, output_path=None):
     agg_keys = [
         "num_trials", "first_avg_improvement", "last_avg_improvement",
         "best_avg_improvement", "worst_avg_improvement",
-        "stdev_avg_improvement", "best_trial", "num_errors",
+        "stdev_avg_improvement", "median_avg_improvement",
+        "best_trial", "num_errors", "error_rate",
+        "num_new_bests", "longest_plateau", "num_regressions",
         "total_improvement", "improvement_per_trial",
+        "avg_training_time",
         "tail_trials", "tail_velocity", "overall_velocity",
     ]
     n_problems = len(all_stats)
@@ -174,7 +224,8 @@ def analyse_and_save(timestamp=None, output_path=None):
     for key in agg_keys:
         aggregate[key] = sum(s[key] for s in all_stats.values()) / n_problems
     # Round integer fields for aggregate
-    for key in ("num_trials", "tail_trials", "best_trial", "num_errors"):
+    for key in ("num_trials", "tail_trials", "best_trial", "num_errors",
+                "num_new_bests", "longest_plateau", "num_regressions"):
         aggregate[key] = round(aggregate[key])
     # Tailing off: True if any problem is tailing off
     tailing_values = [s["tailing_off"] for s in all_stats.values() if s["tailing_off"] is not None]
@@ -182,7 +233,7 @@ def analyse_and_save(timestamp=None, output_path=None):
     all_stats["_aggregate"] = aggregate
 
     # Write to CSV
-    write_header = not os.path.exists(output_path)
+    write_header = not Path(output_path).exists()
     with open(output_path, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=STUDY_FIELDS)
         if write_header:

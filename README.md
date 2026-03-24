@@ -79,18 +79,11 @@ uv run experiment
 ```
 
 
-## Learnings
+## Experimental setup learnings
 
-`reflections.md` contains requests from the Supervisor of what to change about this entire experimental setup. Things we've learnt along the way.
-
-- The Supervisor (& Scientists) really struggle with self-reflection. They tend to focus too much on the facts about what they did, rather than thinking about how they can change their own processes. This feels similar to how humans are poor at expressing their needs as JTBD. However, humans are good at making concrete feature requests, which is what the Supervisor now does in `reflections.md`. **Maybe we should introduce a third interviewer layer?**
+- The Supervisor (& Scientists) really struggle with self-reflection. They tend to focus too much on the facts about what they did, rather than thinking about how they can change their own processes. This feels similar to how humans are poor at expressing their needs as JTBD. However, humans tend to be good at making concrete feature requests so we've enabled that pattern in `reflections.md`. _Maybe we should introduce a third product interviewer layer?_
+- Scientists (like all agents) can often go off the rails. We found that ~70% of the token cost was from <5% of the runs. The smoking gun with all those runs was when they used the `TodoWrite` tool when the others didn't. So this is now off limits and we've added a max-budget.
+- Similarly context rot / going off the rails is still a problem for Sonnet (which the Scientist uses), so we've bounded the Supervisor & Scientist to small invocations. This also forces the models to be deliberate about writing their learnings down.
 - Identical replications don't add enough value for their cost at this stage. We're not looking for statistical significance, we're playing at the boundary of simplicity & optimisation.
-- Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal.
+- Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal. But at the same time, not _too_ many otherwise you can't see any plateau and difference with the `guidance.md`.
 - Gemini CLI just can't operate in this mode.
-- 
-
-
-
-- Study.py no longer cli
-- Evaluate refactor
-- 

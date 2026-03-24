@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import scientist
 import supervisor.evaluate as evaluate
-from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS
+from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS, CRASH_THRESHOLD
 
 
 def _row(avg_improvement, training_time=1.0):
@@ -27,6 +27,12 @@ def _row(avg_improvement, training_time=1.0):
 # ---------------------------------------------------------------------------
 
 class TestAnalyse(unittest.TestCase):
+    def test_returns_none_for_empty(self):
+        self.assertIsNone(analyse([]))
+
+    def test_returns_none_for_single_row(self):
+        self.assertIsNone(analyse([_row(0.05)]))
+
     def test_two_trials_basic(self):
         rows = [_row(0.0), _row(0.05)]
         stats = analyse(rows)
@@ -39,6 +45,7 @@ class TestAnalyse(unittest.TestCase):
         self.assertAlmostEqual(stats["worst_avg_improvement"], 0.0)
         self.assertEqual(stats["best_trial"], 2)
         self.assertEqual(stats["num_errors"], 0)
+        self.assertAlmostEqual(stats["error_rate"], 0.0)
 
     def test_monotonically_improving(self):
         rows = [_row(i * 0.01) for i in range(10)]
@@ -46,6 +53,10 @@ class TestAnalyse(unittest.TestCase):
         self.assertAlmostEqual(stats["total_improvement"], 0.09)
         self.assertAlmostEqual(stats["improvement_per_trial"], 0.009)
         self.assertFalse(stats["tailing_off"])
+        # Every trial sets a new best
+        self.assertEqual(stats["num_new_bests"], 10)
+        self.assertEqual(stats["longest_plateau"], 0)
+        self.assertEqual(stats["num_regressions"], 0)
 
     def test_tailing_off_detected(self):
         # Strong early improvement, flat tail
@@ -88,21 +99,63 @@ class TestAnalyse(unittest.TestCase):
         self.assertAlmostEqual(stats["overall_velocity"], 0.0)
         self.assertAlmostEqual(stats["best_avg_improvement"], 0.05)
         self.assertAlmostEqual(stats["stdev_avg_improvement"], 0.0)
+        # All identical: only first counts as new best
+        self.assertEqual(stats["num_new_bests"], 1)
+        self.assertEqual(stats["longest_plateau"], 5)
 
     def test_best_worst_with_crash_penalty(self):
         rows = [_row(0.05), _row(-10.0), _row(0.10), _row(0.08)]
         stats = analyse(rows)
-        # Best/worst exclude crash penalties (< -1)
+        # Best/worst exclude crash penalties
         self.assertAlmostEqual(stats["best_avg_improvement"], 0.10)
         self.assertAlmostEqual(stats["worst_avg_improvement"], 0.05)
         self.assertEqual(stats["best_trial"], 3)
         self.assertEqual(stats["num_errors"], 1)
+        self.assertAlmostEqual(stats["error_rate"], 0.25)
 
     def test_stdev_with_variance(self):
         rows = [_row(0.0), _row(0.10), _row(0.20)]
         stats = analyse(rows)
         self.assertAlmostEqual(stats["best_avg_improvement"], 0.20)
         self.assertGreater(stats["stdev_avg_improvement"], 0.0)
+
+    def test_median_not_skewed_by_crash(self):
+        rows = [_row(0.05), _row(-10.0), _row(0.10), _row(0.08)]
+        stats = analyse(rows)
+        # Median of valid [0.05, 0.10, 0.08] = 0.08
+        self.assertAlmostEqual(stats["median_avg_improvement"], 0.08)
+
+    def test_num_new_bests_flat_series(self):
+        rows = [_row(0.05)] * 5
+        stats = analyse(rows)
+        self.assertEqual(stats["num_new_bests"], 1)
+
+    def test_longest_plateau(self):
+        # Improve, then flat for 3, then improve again
+        rows = [_row(0.0), _row(0.05), _row(0.03), _row(0.04), _row(0.02), _row(0.10)]
+        stats = analyse(rows)
+        # New bests at index 0, 1, 5 → plateaus of length 3 (indices 2-4)
+        self.assertEqual(stats["longest_plateau"], 3)
+
+    def test_num_regressions(self):
+        # 0.10 is running best, then 0.08 (within 10%), then 0.05 (>10% drop)
+        rows = [_row(0.0), _row(0.10), _row(0.08), _row(0.05)]
+        stats = analyse(rows)
+        # 0.08 < 0.10 * 0.9 = 0.09 → regression
+        # 0.05 < 0.10 * 0.9 = 0.09 → regression
+        self.assertEqual(stats["num_regressions"], 2)
+
+    def test_regressions_exclude_crashes(self):
+        rows = [_row(0.10), _row(-10.0), _row(0.10)]
+        stats = analyse(rows)
+        # -10.0 is a crash, not counted as a regression
+        # 0.10 equals running best, so not a regression either
+        self.assertEqual(stats["num_regressions"], 0)
+
+    def test_avg_training_time(self):
+        rows = [_row(0.0, training_time=60.0), _row(0.05, training_time=80.0), _row(0.10, training_time=100.0)]
+        stats = analyse(rows)
+        self.assertAlmostEqual(stats["avg_training_time"], 80.0)
 
 
 # ---------------------------------------------------------------------------
@@ -318,10 +371,16 @@ class TestPrintReport(unittest.TestCase):
             "best_avg_improvement": 0.09,
             "worst_avg_improvement": 0.0,
             "stdev_avg_improvement": 0.03,
+            "median_avg_improvement": 0.045,
             "best_trial": 10,
             "num_errors": 0,
+            "error_rate": 0.0,
+            "num_new_bests": 10,
+            "longest_plateau": 0,
+            "num_regressions": 0,
             "total_improvement": 0.09,
             "improvement_per_trial": 0.009,
+            "avg_training_time": 80.0,
             "tail_trials": 2,
             "tail_velocity": 0.005,
             "overall_velocity": 0.009,

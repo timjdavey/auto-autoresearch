@@ -1,20 +1,5 @@
-#!/usr/bin/env python3
-# ============================================================
-# DO NOT EDIT — this file is managed at the top level.
-# Neither the Supervisor nor the Scientist should modify it.
-# ============================================================
-#
-# Runs a study: one or more Scientist invocations across all problems.
-#
-# Usage:
-#   uv run studies                            # haiku (default)
-#   uv run studies --trials 5                 # 5 fresh-context trials
-#   uv run studies --timeout 300              # 5-minute per-trial timeout
-#   uv run studies --opus                     # run with opus (for testing)
-#   uv run studies --haiku                    # run with haiku (explicit)
-#   uv run studies --codex                    # run with codex (gpt-5.4-mini)
+"""Runs a study: one or more Scientist invocations across all problems."""
 
-import argparse
 import csv
 import importlib
 import os
@@ -199,27 +184,3 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
             future.result()  # propagate exceptions
 
     return log_dir
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Run a study: one or more Scientist invocations.")
-    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help=f"Number of trials (default: {DEFAULT_TRIALS})")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Per-trial timeout in seconds (default: {DEFAULT_TIMEOUT})")
-    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use: opus/sonnet/haiku (Claude) or codex/codex-mini/codex-full (Codex) (default: {DEFAULT_MODEL})")
-    parser.add_argument("--opus", action="store_true", help="Shorthand for --model opus")
-    parser.add_argument("--haiku", action="store_true", help="Shorthand for --model haiku")
-    parser.add_argument("--codex", action="store_true", help="Shorthand for --model codex (gpt-5.4-mini)")
-    parser.add_argument("--max-budget", type=float, default=DEFAULT_MAX_BUDGET, help=f"Max USD per trial (default: {DEFAULT_MAX_BUDGET})")
-    parser.add_argument("--sequential", action="store_true", default=True, help="Run problems sequentially (default, avoids rate limits)")
-    parser.add_argument("--parallel", action="store_true", help="Run problems in parallel")
-    args = parser.parse_args()
-
-    model = ("opus" if args.opus else "haiku" if args.haiku
-             else "codex" if args.codex else args.model)
-    sequential = not args.parallel
-    log_dir = run_study(num_trials=args.trials, trial_timeout=args.timeout, model=model, sequential=sequential, max_budget_usd=args.max_budget)
-    print(f"Logs: {log_dir}", file=sys.stderr)
-
-
-if __name__ == "__main__":
-    main()
