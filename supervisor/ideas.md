@@ -28,11 +28,19 @@ RED FLAG that you need to given seperate advice for each problem.
 ## Proven strategies
 
 *(what reliably works, and why)*
+- **Multi-start heuristic initialization:** Graph Colouring's multi-start DSATUR (12 high-degree + 12 random starting points) reliably improved solutions. Generalizable: starting point diversity matters.
+- **Local search with max-iteration guards:** Graph Colouring's reduce_colors() with iteration limits (passes < 3) avoids computational blow-up. Key: bounded loops prevent timeouts.
 
 ## Promising
 
 *(showed potential, needs refinement — what to tweak)*
+- **Failure recovery strategy:** TSP/QAP timeouts suggest Scientists need explicit guidance on how to respond when trials fail. Instead of blind retries, structure reflection: "What caused the timeout? Is the solver inefficient or the guidance wrong?"
+- **Time-aware solver design:** QAP's 80s+ training times and TSP's risk of infinite loops suggest Scientist should track solver execution time, profile bottlenecks, and prioritize reducing asymptotic complexity over trying more iterations.
+- **Floating-point safeguards:** TSP uses `nlen >= prev - 1e-10` in convergence checks. At that tolerance, rounding error can cause false "no improvement" signals. Scientist should look for tolerance-related infinite loops.
+- **Computational budget visibility:** Scientist should profile per-instance time breakdown (e.g., nearest-neighbor vs local search vs restarts) and identify which phase consumes the budget.
 
 ## Abandoned
 
 *(tried and failed, or logically flawed — why, to avoid re-testing)*
+- **Minimal guidance (4-point process):** Study 1 showed Scientists need structure to handle failure modes. No room for reflection, diagnosis, or strategic pivots. Insufficient for harder problems (TSP, QAP).
+- **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver.

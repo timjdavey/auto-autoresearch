@@ -1,5 +1,5 @@
 # train.py - TSP solver: ILS + 2-opt + or-opt(1-5) + Held-Karp for small n
-# Adds random-reinsertion LNI as diversification to escape deep local optima
+# Adaptive k-neighbors + 55s budget + random LNI for deep escape
 
 import time
 import random
@@ -164,15 +164,59 @@ def _or_opt_nn(tour, pos, dist, neighbors, n, k, seg_size):
 
 
 @njit(cache=True)
+def _swap_opt(tour, pos, dist, neighbors, n, k):
+    """City swap: simultaneously swap two non-adjacent cities (4-edge move)."""
+    improved = True
+    while improved:
+        improved = False
+        for i in range(n):
+            t1 = tour[i]
+            pi = (i - 1 + n) % n; ni = (i + 1) % n
+            a = tour[pi]; b = tour[ni]
+            for ki in range(k):
+                t2 = neighbors[t1, ki]
+                j = pos[t2]
+                # Skip adjacent or same
+                if j == i or j == pi or j == ni: continue
+                pj = (j - 1 + n) % n; nj = (j + 1) % n
+                # Skip if t2 neighbors include t1 (edge case)
+                c = tour[pj]; d = tour[nj]
+                gain = (dist[a, t1] + dist[t1, b] + dist[c, t2] + dist[t2, d]
+                       - dist[a, t2] - dist[t2, b] - dist[c, t1] - dist[t1, d])
+                if gain > 1e-10:
+                    tour[i] = t2; tour[j] = t1
+                    pos[t1] = j; pos[t2] = i
+                    improved = True; break
+    return tour
+
+
+@njit(cache=True)
 def _local_search_nn(tour, pos, dist, neighbors, n, k):
     prev = _tour_length(tour, dist, n)
     while True:
         tour = _two_opt_nn(tour, pos, dist, neighbors, n, k)
+        tour = _swap_opt(tour, pos, dist, neighbors, n, k)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 1)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 2)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 3)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 4)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 5)
+        nlen = _tour_length(tour, dist, n)
+        if nlen >= prev - 1e-10: break
+        prev = nlen
+    return tour
+
+
+@njit(cache=True)
+def _local_search_fast(tour, pos, dist, neighbors, n, k):
+    """Faster: or-opt(1-3) only — more ILS iterations for large n."""
+    prev = _tour_length(tour, dist, n)
+    while True:
+        tour = _two_opt_nn(tour, pos, dist, neighbors, n, k)
+        tour = _swap_opt(tour, pos, dist, neighbors, n, k)
+        tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 1)
+        tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 2)
+        tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 3)
         nlen = _tour_length(tour, dist, n)
         if nlen >= prev - 1e-10: break
         prev = nlen
@@ -188,7 +232,9 @@ def _warmup():
     dist = np.sqrt(dx*dx+dy*dy); k = min(5, n-1)
     neighbors = _build_neighbors(dist, n, k)
     t = _nn_tour(dist, n, 0); pos = np.zeros(n, dtype=np.int64)
+    t = _swap_opt(t, pos, dist, neighbors, n, k)
     t = _local_search_nn(t, pos, dist, neighbors, n, k)
+    t = _local_search_fast(t, pos, dist, neighbors, n, k)
     _held_karp(dist, n)
 
 
@@ -244,16 +290,25 @@ def solve(coords):
     # Adaptive k: fewer neighbors for large n → faster iterations → more ILS rounds
     if n < 300: k = min(20, n-1)
     elif n < 500: k = min(15, n-1)
-    elif n < 700: k = min(12, n-1)
-    else: k = min(8, n-1)
+    elif n < 1000: k = min(12, n-1)
+    else: k = min(10, n-1)
     neighbors = _build_neighbors(dist, n, k)
     pos = np.zeros(n, dtype=np.int64)
     deadline = time.perf_counter() + 55.0
 
-    # Phase 1: multi-start NN
-    p1e = time.perf_counter() + min(8.0, 55.0 * 0.15)
+    # Choose local search depth based on n
+    ls = _local_search_fast if n >= 600 else _local_search_nn
+
+    # Phase 1: multi-start NN (limited for large n to avoid timeout)
+    p1_budget = min(6.0, 55.0 * 0.12)  # Reduced from 8.0 to give more time to Phase 2
+    if n >= 500: p1_budget = min(3.0, 55.0 * 0.06)  # Faster phase 1 for large n
+    p1e = time.perf_counter() + p1_budget
     best_tour = _nn_tour(dist, n, 0)
-    best_tour = _local_search_nn(best_tour, pos, dist, neighbors, n, k)
+    if n >= 200:  # Use fast LS for n >= 200 (lowered from 300)
+        # Fast phase 1 for medium/large n: skip expensive or-opt(4-5)
+        best_tour = _local_search_fast(best_tour, pos, dist, neighbors, n, k)
+    else:
+        best_tour = ls(best_tour, pos, dist, neighbors, n, k)
     best_len = _tour_length(best_tour, dist, n)
     for s in range(1, n):
         if time.perf_counter() > p1e: break
@@ -261,17 +316,20 @@ def solve(coords):
         t = _two_opt_nn(t, pos, dist, neighbors, n, k)
         tl = _tour_length(t, dist, n)
         if tl < best_len:
-            t = _local_search_nn(t, pos, dist, neighbors, n, k)
+            if n >= 300:
+                t = _local_search_fast(t, pos, dist, neighbors, n, k)
+            else:
+                t = ls(t, pos, dist, neighbors, n, k)
             tl = _tour_length(t, dist, n)
             if tl < best_len: best_len = tl; best_tour = t.copy()
 
-    # Phase 2: ILS with three alternating perturbations:
-    # double-bridge, greedy LNI, random LNI (most diverse)
-    stag = max(15, n // 4); current = best_tour.copy(); cur_len = best_len
+    # Phase 2: ILS cycling through double-bridge, greedy LNI, random LNI
+    # stag must be small enough to trigger restarts within Phase 2 time budget
+    stag = max(10, min(25, n // 25)); current = best_tour.copy(); cur_len = best_len
     no_imp = 0; nn_s = 1; restart_count = 0; perturb_mode = 0
-    k_lni_small = max(8, n // 8)
+    k_lni_small = max(6, n // 12)
     k_lni_large = max(15, n // 5)
-    k_lni_rand = max(20, n // 4)   # larger removal for random reinsert
+    k_lni_rand = max(12, n // 6)
 
     while time.perf_counter() < deadline - 1.0:
         if perturb_mode == 0:
@@ -279,21 +337,22 @@ def solve(coords):
             pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
             cand = np.concatenate([current[:p1], current[p3:], current[p2:p3], current[p1:p2]])
         elif perturb_mode == 1:
-            # Greedy LNI
             k_use = k_lni_large if (no_imp > stag // 2) else k_lni_small
             cand = _lni_perturb(current, dist, k_use)
         else:
-            # Random reinsertion LNI — maximally diverse, escapes deep basins
             cand = _lni_random_perturb(current, k_lni_rand)
         perturb_mode = (perturb_mode + 1) % 3
 
-        cand = _local_search_nn(cand, pos, dist, neighbors, n, k)
+        cand = ls(cand, pos, dist, neighbors, n, k)
         clen = _tour_length(cand, dist, n)
         if clen < cur_len - 1e-10:
             current = cand.copy(); cur_len = clen; no_imp = 0
             if clen < best_len - 1e-10: best_len = clen; best_tour = cand.copy()
         else:
             no_imp += 1
+            # SA-style weak acceptance when stagnated: escape shallow basins
+            if no_imp > stag // 2 and clen < cur_len * 1.003 and random.random() < 0.2:
+                current = cand.copy(); cur_len = clen
 
         if no_imp >= stag:
             if restart_count % 3 == 0:
@@ -302,9 +361,8 @@ def solve(coords):
                 perm = list(range(n)); random.shuffle(perm)
                 t = np.array(perm, dtype=np.int64)
             else:
-                # Large random LNI restart for maximum diversity
                 t = _lni_random_perturb(best_tour, min(n // 2, 60))
-            t = _local_search_nn(t, pos, dist, neighbors, n, k)
+            t = ls(t, pos, dist, neighbors, n, k)
             tl = _tour_length(t, dist, n)
             if tl < best_len: best_len = tl; best_tour = t.copy()
             current = t.copy(); cur_len = tl; no_imp = 0; restart_count += 1
