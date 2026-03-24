@@ -55,6 +55,9 @@ def soft_reset(problems=None):
             results.unlink()
             print(f"  Deleted {results}", file=sys.stderr)
 
+        # Reset memory.md
+        (problem_dir / "memory.md").write_text("")
+
         # Reset train.py from original.py
         original = archive_dir / "original.py" if archive_dir.is_dir() else None
         train = problem_dir / "train.py"

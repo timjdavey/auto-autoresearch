@@ -18,8 +18,11 @@ You are invoked fresh each phase. Use your editable files to carry state forward
 - `scientist/{problem}/results.tsv` — per-trial metrics
 - `scientist/{problem}/train.py` — current solver (reset automatically each study)
 - `scientist/{problem}/archive/` — code snapshots and summaries from prior trials
+- `scientist/{problem}/memory.md` — per-problem scratchpad, persists across trials within a study, reset to blank at the start of each study
 
-Each trial invokes a fresh Scientist with no memory of prior trials except `results.tsv` and `archive/`.
+Each trial invokes a fresh Scientist with no memory of prior trials except `results.tsv`, `archive/`, and `memory.md`.
+
+Each problem lab contains a `memory.md` file that Scientists can read and write. It persists across trials within a study but is reset to blank at the start of each new study. It is your job to decide how Scientists should use this file — include instructions in `guidance.md`.
 
 
 ## First study — baseline
