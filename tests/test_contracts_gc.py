@@ -49,7 +49,7 @@ class TestSolverContract(unittest.TestCase):
         self.assertEqual(colouring, [0])
 
     def test_all_training_instances(self):
-        """Smoke test: solver produces valid colourings for all 20 training instances."""
+        """Smoke test: solver produces valid colourings for all training instances."""
         for name, inst in TRAIN_INSTANCES.items():
             with self.subTest(instance=name):
                 colouring = _solve(inst["adj"], inst["n_nodes"], inst["n_edges"])

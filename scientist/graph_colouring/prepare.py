@@ -104,30 +104,15 @@ def _generate_random_instance(n_nodes: int, edge_prob: float, seed: int):
 
 
 TRAIN_INSTANCES = {
-    "rand30a":  {"adj": (d := _generate_random_instance(30,  0.3, seed=142857))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand30b":  {"adj": (d := _generate_random_instance(30,  0.3, seed=285714))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50a":  {"adj": (d := _generate_random_instance(50,  0.3, seed=314159))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50b":  {"adj": (d := _generate_random_instance(50,  0.3, seed=271828))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50c":  {"adj": (d := _generate_random_instance(50,  0.3, seed=577215))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50d":  {"adj": (d := _generate_random_instance(50,  0.3, seed=161803))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50e":  {"adj": (d := _generate_random_instance(50,  0.5, seed=236067))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand50f":  {"adj": (d := _generate_random_instance(50,  0.5, seed=141421))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
     "rand75a":  {"adj": (d := _generate_random_instance(75,  0.3, seed=173205))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand75b":  {"adj": (d := _generate_random_instance(75,  0.3, seed=223606))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand75c":  {"adj": (d := _generate_random_instance(75,  0.3, seed=264575))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand75d":  {"adj": (d := _generate_random_instance(75,  0.3, seed=316227))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
     "rand100a": {"adj": (d := _generate_random_instance(100, 0.3, seed=346410))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand100b": {"adj": (d := _generate_random_instance(100, 0.3, seed=374165))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand100c": {"adj": (d := _generate_random_instance(100, 0.3, seed=412310))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand100d": {"adj": (d := _generate_random_instance(100, 0.3, seed=447213))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand100e": {"adj": (d := _generate_random_instance(100, 0.5, seed=483568))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand100f": {"adj": (d := _generate_random_instance(100, 0.5, seed=509901))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand150a": {"adj": (d := _generate_random_instance(150, 0.3, seed=538516))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand150b": {"adj": (d := _generate_random_instance(150, 0.3, seed=567128))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand150a": {"adj": (d := _generate_random_instance(150, 0.4, seed=538516))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand200a": {"adj": (d := _generate_random_instance(200, 0.3, seed=600001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand200e": {"adj": (d := _generate_random_instance(200, 0.5, seed=700001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
 }
 
 QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
-                   if k in ("rand100e", "rand100f", "rand150a")}
+                   if k in ("rand150a", "rand200a", "rand200e")}
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 
@@ -162,26 +147,11 @@ def _count_colours(colouring):
 # Precomputed: number of colours used by greedy on each training instance.
 # To recompute: run _greedy_solve on each instance and call _count_colours.
 GREEDY_BASELINES = {
-    "rand30a": 5,
-    "rand30b": 6,
-    "rand50a": 8,
-    "rand50b": 8,
-    "rand50c": 10,
-    "rand50d": 9,
-    "rand50e": 12,
-    "rand50f": 13,
     "rand75a": 12,
-    "rand75b": 12,
-    "rand75c": 12,
-    "rand75d": 12,
     "rand100a": 14,
-    "rand100b": 15,
-    "rand100c": 14,
-    "rand100d": 15,
-    "rand100e": 21,
-    "rand100f": 23,
-    "rand150a": 17,
-    "rand150b": 18,
+    "rand150a": 24,
+    "rand200a": 24,
+    "rand200e": 35,
 }
 
 # ---------------------------------------------------------------------------
@@ -301,7 +271,7 @@ def benchmark(solve_fn) -> dict:
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 
-# Per-instance columns for each QUICK_INSTANCE (rand30a, rand75a, rand150a)
+# Per-instance columns for each QUICK_INSTANCE (rand150a, rand200a, rand200e)
 _INSTANCE_NAMES = list(QUICK_INSTANCES.keys())
 RESULT_FIELDS = (
     ["timestamp", "status", "avg_improvement", "training_time"]

@@ -84,30 +84,15 @@ def _generate_random_instance(n_cities: int, seed: int, max_coord: int = 10000) 
     return [(rng.randint(0, max_coord), rng.randint(0, max_coord)) for _ in range(n_cities)]
 
 TRAIN_INSTANCES = {
-    "rand20a":  {"coords": _generate_random_instance(20,  seed=142857), "optimal": None, "known": False},
-    "rand20b":  {"coords": _generate_random_instance(20,  seed=285714), "optimal": None, "known": False},
-    "rand30a":  {"coords": _generate_random_instance(30,  seed=314159), "optimal": None, "known": False},
-    "rand30b":  {"coords": _generate_random_instance(30,  seed=271828), "optimal": None, "known": False},
-    "rand50a":  {"coords": _generate_random_instance(50,  seed=577215), "optimal": None, "known": False},
-    "rand50b":  {"coords": _generate_random_instance(50,  seed=161803), "optimal": None, "known": False},
-    "rand50c":  {"coords": _generate_random_instance(50,  seed=236067), "optimal": None, "known": False},
-    "rand50d":  {"coords": _generate_random_instance(50,  seed=141421), "optimal": None, "known": False},
-    "rand75a":  {"coords": _generate_random_instance(75,  seed=173205), "optimal": None, "known": False},
-    "rand75b":  {"coords": _generate_random_instance(75,  seed=223606), "optimal": None, "known": False},
-    "rand75c":  {"coords": _generate_random_instance(75,  seed=264575), "optimal": None, "known": False},
-    "rand75d":  {"coords": _generate_random_instance(75,  seed=316227), "optimal": None, "known": False},
     "rand100a": {"coords": _generate_random_instance(100, seed=346410), "optimal": None, "known": False},
-    "rand100b": {"coords": _generate_random_instance(100, seed=374165), "optimal": None, "known": False},
-    "rand100c": {"coords": _generate_random_instance(100, seed=412310), "optimal": None, "known": False},
-    "rand100d": {"coords": _generate_random_instance(100, seed=447213), "optimal": None, "known": False},
-    "rand150a": {"coords": _generate_random_instance(150, seed=483568), "optimal": None, "known": False},
-    "rand150b": {"coords": _generate_random_instance(150, seed=509901), "optimal": None, "known": False},
     "rand200a": {"coords": _generate_random_instance(200, seed=538516), "optimal": None, "known": False},
-    "rand200b": {"coords": _generate_random_instance(200, seed=567128), "optimal": None, "known": False},
+    "rand300a": {"coords": _generate_random_instance(300, seed=600001), "optimal": None, "known": False},
+    "rand500a": {"coords": _generate_random_instance(500, seed=700001), "optimal": None, "known": False},
+    "rand750a": {"coords": _generate_random_instance(750, seed=800001), "optimal": None, "known": False},
 }
 
 QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
-                   if k in ("rand100a", "rand150a", "rand200a")}
+                   if k in ("rand300a", "rand500a", "rand750a")}
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 
@@ -166,26 +151,11 @@ def _nn_solve(coords: list[tuple[int, int]]) -> list[int]:
     return tour
 
 NN_BASELINES = {
-    "rand20a": 39587.044174362425,
-    "rand20b": 40842.76058618296,
-    "rand30a": 57485.3313339793,
-    "rand30b": 59994.76856526547,
-    "rand50a": 71140.87654979469,
-    "rand50b": 81396.97894233433,
-    "rand50c": 66471.09699727633,
-    "rand50d": 70741.68175324058,
-    "rand75a": 78169.84343551836,
-    "rand75b": 85407.94029874004,
-    "rand75c": 87305.14519900268,
-    "rand75d": 85693.18727546492,
     "rand100a": 96800.24669345064,
-    "rand100b": 106996.82632505952,
-    "rand100c": 89833.000561935,
-    "rand100d": 94778.6431453671,
-    "rand150a": 108224.7699586495,
-    "rand150b": 112584.70702871727,
     "rand200a": 137823.6598990963,
-    "rand200b": 138506.1234535633,
+    "rand300a": 165160.82984555422,
+    "rand500a": 211640.08835372134,
+    "rand750a": 249266.64625383375,
 }
 
 # ---------------------------------------------------------------------------
@@ -284,7 +254,7 @@ def benchmark(solve_fn) -> dict:
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 
-# Per-instance columns for each QUICK_INSTANCE (rand20a, rand75a, rand150a)
+# Per-instance columns for each QUICK_INSTANCE (rand300a, rand500a, rand750a)
 _INSTANCE_NAMES = list(QUICK_INSTANCES.keys())
 RESULT_FIELDS = (
     ["timestamp", "status", "avg_improvement", "training_time"]

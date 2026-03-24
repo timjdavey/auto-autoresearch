@@ -3,7 +3,7 @@ name = "auto-autoresearch"
 version = "0.1.0"
 description = "Autoresearching how to do autoresearch"
 requires-python = ">=3.13"
-dependencies = ["numpy", "scipy", "numba"]
+dependencies = ["numpy", "scipy"]
 
 [tool.uv]
 package = true

@@ -189,9 +189,9 @@ class TestBenchmark(unittest.TestCase):
 
 class TestInstanceData(unittest.TestCase):
     def test_counts(self):
-        self.assertEqual(len(TRAIN_INSTANCES), 20)
+        self.assertEqual(len(TRAIN_INSTANCES), 5)
         self.assertEqual(len(BENCHMARK_INSTANCES), 5)
-        self.assertEqual(len(INSTANCES), 25)
+        self.assertEqual(len(INSTANCES), 10)
 
     def test_quick_instances(self):
         self.assertEqual(len(QUICK_INSTANCES), 3)
@@ -200,8 +200,8 @@ class TestInstanceData(unittest.TestCase):
 
     def test_random_instances_deterministic(self):
         from scientist.graph_colouring.prepare import _generate_random_instance
-        adj, n_nodes, n_edges = _generate_random_instance(30, 0.3, seed=142857)
-        self.assertEqual(adj, TRAIN_INSTANCES["rand30a"]["adj"])
+        adj, n_nodes, n_edges = _generate_random_instance(75, 0.3, seed=173205)
+        self.assertEqual(adj, TRAIN_INSTANCES["rand75a"]["adj"])
 
     def test_benchmark_have_optimal(self):
         for name, inst in BENCHMARK_INSTANCES.items():

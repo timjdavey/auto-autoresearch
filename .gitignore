@@ -9,6 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .pytest_cache
+.vscode
 worktrees/
 results/
 queue/

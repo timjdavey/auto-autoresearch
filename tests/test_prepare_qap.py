@@ -1,112 +1,95 @@
-"""Tests for prepare.py — TSP evaluation harness."""
+"""Tests for prepare.py — QAP evaluation harness."""
 
-import math
 import unittest
 
-import scientist.tsp.prepare as prepare
-from scientist.tsp.prepare import (
+import scientist.qap.prepare as prepare
+from scientist.qap.prepare import (
     BENCHMARK_INSTANCES,
+    IDENTITY_BASELINES,
     INSTANCES,
-    NN_BASELINES,
     QUICK_INSTANCES,
     TIME_BUDGET,
     TRAIN_INSTANCES,
-    _nn_solve,
+    _identity_cost,
     _run_solver,
+    assignment_cost,
     benchmark,
-    euclidean_distance,
     evaluate,
-    tour_length,
-    validate_tour,
+    validate_assignment,
 )
 
 
 # ---------------------------------------------------------------------------
-# euclidean_distance
+# assignment_cost
 # ---------------------------------------------------------------------------
 
-class TestEuclideanDistance(unittest.TestCase):
-    def test_same_point(self):
-        self.assertEqual(euclidean_distance((5, 5), (5, 5)), 0.0)
+class TestAssignmentCost(unittest.TestCase):
+    def test_identity_2x2(self):
+        flow = [[0, 5], [5, 0]]
+        distance = [[0, 3], [3, 0]]
+        # identity: cost = 5*3 + 5*3 = 30
+        self.assertEqual(assignment_cost(flow, distance, [0, 1]), 30)
 
-    def test_known_distance(self):
-        self.assertAlmostEqual(euclidean_distance((0, 0), (3, 4)), 5.0)
+    def test_swap_2x2(self):
+        flow = [[0, 5], [5, 0]]
+        distance = [[0, 3], [3, 0]]
+        # swap: cost = 5*3 + 5*3 = 30 (symmetric case)
+        self.assertEqual(assignment_cost(flow, distance, [1, 0]), 30)
 
-    def test_symmetry(self):
-        a, b = (10, 20), (30, 40)
-        self.assertEqual(euclidean_distance(a, b), euclidean_distance(b, a))
-
-
-# ---------------------------------------------------------------------------
-# tour_length
-# ---------------------------------------------------------------------------
-
-class TestTourLength(unittest.TestCase):
-    def test_single_city(self):
-        self.assertEqual(tour_length([(0, 0)], [0]), 0.0)
-
-    def test_triangle(self):
-        coords = [(0, 0), (3, 0), (0, 4)]
-        length = tour_length(coords, [0, 1, 2])
-        expected = 3.0 + 5.0 + 4.0  # 0->1 + 1->2 + 2->0
-        self.assertAlmostEqual(length, expected)
-
-    def test_order_affects_length(self):
-        coords = [(0, 0), (1, 0), (0, 1), (1, 1)]
-        l1 = tour_length(coords, [0, 1, 3, 2])  # square path
-        l2 = tour_length(coords, [0, 1, 2, 3])  # zigzag path
-        self.assertNotAlmostEqual(l1, l2)
+    def test_asymmetric_3x3(self):
+        flow = [[0, 1, 0], [1, 0, 0], [0, 0, 0]]
+        distance = [[0, 10, 20], [10, 0, 30], [20, 30, 0]]
+        # identity: flow[0][1]*dist[0][1] + flow[1][0]*dist[1][0] = 1*10 + 1*10 = 20
+        self.assertEqual(assignment_cost(flow, distance, [0, 1, 2]), 20)
+        # swap 0,1: flow[0][1]*dist[1][0] + flow[1][0]*dist[0][1] = 1*10 + 1*10 = 20
+        self.assertEqual(assignment_cost(flow, distance, [1, 0, 2]), 20)
 
 
 # ---------------------------------------------------------------------------
-# validate_tour
+# validate_assignment
 # ---------------------------------------------------------------------------
 
-class TestValidateTour(unittest.TestCase):
+class TestValidateAssignment(unittest.TestCase):
     def test_valid(self):
-        self.assertIsNone(validate_tour([(0, 0), (1, 1), (2, 2)], [2, 0, 1]))
+        self.assertIsNone(validate_assignment(3, [2, 0, 1]))
 
     def test_wrong_length(self):
-        err = validate_tour([(0, 0), (1, 1)], [0])
+        err = validate_assignment(2, [0])
         self.assertIn("1", err)
         self.assertIn("2", err)
 
     def test_not_a_list(self):
-        err = validate_tour([(0, 0)], (0,))
+        err = validate_assignment(1, (0,))
         self.assertIn("list", err)
 
-    def test_duplicate_cities(self):
-        err = validate_tour([(0, 0), (1, 1)], [0, 0])
+    def test_duplicate_locations(self):
+        err = validate_assignment(2, [0, 0])
         self.assertIsNotNone(err)
 
-    def test_missing_city(self):
-        err = validate_tour([(0, 0), (1, 1), (2, 2)], [0, 1, 5])
+    def test_out_of_range(self):
+        err = validate_assignment(2, [0, 5])
         self.assertIsNotNone(err)
 
 
 # ---------------------------------------------------------------------------
-# _nn_solve
+# _identity_cost
 # ---------------------------------------------------------------------------
 
-class TestNNSolve(unittest.TestCase):
-    def test_empty(self):
-        self.assertEqual(_nn_solve([]), [])
-
-    def test_single_city(self):
-        self.assertEqual(_nn_solve([(5, 5)]), [0])
-
-    def test_produces_valid_tour(self):
-        coords = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
-        tour = _nn_solve(coords)
-        self.assertIsNone(validate_tour(coords, tour))
+class TestIdentityCost(unittest.TestCase):
+    def test_matches_assignment_cost(self):
+        flow = [[0, 5, 2], [5, 0, 3], [2, 3, 0]]
+        distance = [[0, 10, 20], [10, 0, 30], [20, 30, 0]]
+        self.assertEqual(
+            _identity_cost(flow, distance),
+            assignment_cost(flow, distance, [0, 1, 2]),
+        )
 
     def test_baselines_match_cached_values(self):
-        """Most important test: verify NN_BASELINES are consistent."""
+        """Most important test: verify IDENTITY_BASELINES are consistent."""
         for name, inst in TRAIN_INSTANCES.items():
-            tour = _nn_solve(inst["coords"])
-            length = tour_length(inst["coords"], tour)
-            self.assertAlmostEqual(
-                length, NN_BASELINES[name], places=5,
+            cost = _identity_cost(inst["flow"], inst["distance"])
+            self.assertEqual(
+                cost, IDENTITY_BASELINES[name],
                 msg=f"Cached baseline for {name} doesn't match computed value",
             )
 
@@ -117,20 +100,26 @@ class TestNNSolve(unittest.TestCase):
 
 class TestRunSolver(unittest.TestCase):
     def test_successful_solve(self):
-        coords = [(0, 0), (1, 0), (0, 1)]
-        result, elapsed = _run_solver(lambda c: list(range(len(c))), coords)
+        flow = [[0, 1], [1, 0]]
+        distance = [[0, 1], [1, 0]]
+        result, elapsed = _run_solver(lambda f, d: list(range(len(f))), flow, distance)
         self.assertIsInstance(result, list)
         self.assertGreaterEqual(elapsed, 0)
 
     def test_solver_raises(self):
-        coords = [(0, 0), (1, 0)]
-        result, elapsed = _run_solver(lambda c: (_ for _ in ()).throw(ValueError("boom")), coords)
+        flow = [[0, 1], [1, 0]]
+        distance = [[0, 1], [1, 0]]
+        result, elapsed = _run_solver(
+            lambda f, d: (_ for _ in ()).throw(ValueError("boom")),
+            flow, distance,
+        )
         self.assertIsInstance(result, str)
         self.assertIn("boom", result)
 
-    def test_invalid_tour_returned(self):
-        coords = [(0, 0), (1, 0)]
-        result, _ = _run_solver(lambda c: [0, 0], coords)
+    def test_invalid_assignment_returned(self):
+        flow = [[0, 1], [1, 0]]
+        distance = [[0, 1], [1, 0]]
+        result, _ = _run_solver(lambda f, d: [0, 0], flow, distance)
         self.assertIsInstance(result, str)  # error message
 
     def test_timeout(self):
@@ -139,7 +128,12 @@ class TestRunSolver(unittest.TestCase):
         old = prepare.TIME_BUDGET
         prepare.TIME_BUDGET = 0.01
         try:
-            result, _ = _run_solver(lambda c: (_time.sleep(0.1), list(range(len(c))))[-1], coords=[(0, 0)])
+            flow = [[0]]
+            distance = [[0]]
+            result, _ = _run_solver(
+                lambda f, d: (_time.sleep(0.1), [0])[1],
+                flow, distance,
+            )
             self.assertIsInstance(result, str)
             self.assertIn("time", result.lower())
         finally:
@@ -151,15 +145,15 @@ class TestRunSolver(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestEvaluate(unittest.TestCase):
-    def test_with_nn_solver(self):
-        results = evaluate(_nn_solve)
+    def test_with_identity_solver(self):
+        results = evaluate(lambda f, d: list(range(len(f))))
         self.assertIn("avg_improvement", results)
         self.assertAlmostEqual(results["avg_improvement"], 0.0, places=5)
         for name in QUICK_INSTANCES:
             self.assertTrue(results[name]["valid"])
 
     def test_crashing_solver(self):
-        def bad_solver(c):
+        def bad_solver(f, d):
             raise RuntimeError("crash")
 
         results = evaluate(bad_solver)
@@ -168,7 +162,7 @@ class TestEvaluate(unittest.TestCase):
             self.assertFalse(results[name]["valid"])
 
     def test_result_keys(self):
-        results = evaluate(_nn_solve)
+        results = evaluate(lambda f, d: list(range(len(f))))
         self.assertIn("avg_improvement", results)
         self.assertIn("total_time", results)
         for name in QUICK_INSTANCES:
@@ -180,23 +174,22 @@ class TestEvaluate(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestBenchmark(unittest.TestCase):
-    def test_with_nn_solver(self):
-        results = benchmark(_nn_solve)
+    def test_with_identity_solver(self):
+        results = benchmark(lambda f, d: list(range(len(f))))
         self.assertIn("avg_loss", results)
-        self.assertGreater(results["avg_loss"], 0)  # NN is worse than optimal
+        self.assertGreater(results["avg_loss"], 0)  # identity is worse than best-known
         for name in BENCHMARK_INSTANCES:
             self.assertTrue(results[name]["valid"])
-            self.assertGreater(results[name]["loss"], 0)
 
     def test_crashing_solver(self):
-        def bad_solver(c):
+        def bad_solver(f, d):
             raise RuntimeError("crash")
 
         results = benchmark(bad_solver)
         self.assertAlmostEqual(results["avg_loss"], 10.0)
 
     def test_result_keys(self):
-        results = benchmark(_nn_solve)
+        results = benchmark(lambda f, d: list(range(len(f))))
         self.assertIn("avg_loss", results)
         self.assertIn("total_time", results)
         for name in BENCHMARK_INSTANCES:
@@ -219,8 +212,9 @@ class TestInstanceData(unittest.TestCase):
             self.assertIn(name, TRAIN_INSTANCES)
 
     def test_random_instances_deterministic(self):
-        from scientist.tsp.prepare import _generate_random_instance
-        self.assertEqual(_generate_random_instance(100, seed=346410), list(TRAIN_INSTANCES["rand100a"]["coords"]))
+        from scientist.qap.prepare import _generate_random_instance
+        flow, distance = _generate_random_instance(20, seed=142857)
+        self.assertEqual(flow, TRAIN_INSTANCES["rand20a"]["flow"])
 
     def test_benchmark_have_optimal(self):
         for name, inst in BENCHMARK_INSTANCES.items():
@@ -231,6 +225,17 @@ class TestInstanceData(unittest.TestCase):
         for name, inst in TRAIN_INSTANCES.items():
             self.assertIsNone(inst["optimal"], f"{name} should have no optimal")
             self.assertFalse(inst["known"], f"{name} should not be known")
+
+    def test_flow_distance_symmetric(self):
+        """All instances should have symmetric flow and distance matrices."""
+        for name, inst in TRAIN_INSTANCES.items():
+            flow = inst["flow"]
+            distance = inst["distance"]
+            n = len(flow)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    self.assertEqual(flow[i][j], flow[j][i], f"{name}: flow not symmetric at ({i},{j})")
+                    self.assertEqual(distance[i][j], distance[j][i], f"{name}: distance not symmetric at ({i},{j})")
 
 
 if __name__ == "__main__":

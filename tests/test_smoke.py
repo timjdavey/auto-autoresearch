@@ -14,6 +14,9 @@ from scientist.tsp.prepare import benchmark as tsp_benchmark, evaluate as tsp_ev
 from scientist.graph_colouring.train import solve as gc_solve
 from scientist.graph_colouring.prepare import benchmark as gc_benchmark, evaluate as gc_evaluate
 
+from scientist.qap.train import solve as qap_solve
+from scientist.qap.prepare import benchmark as qap_benchmark, evaluate as qap_evaluate
+
 
 def _run_pipeline(test_case, evaluate_fn, benchmark_fn, solve_fn):
     """Shared pipeline test for any problem."""
@@ -55,6 +58,9 @@ class TestEndToEndPipeline(unittest.TestCase):
 
     def test_graph_colouring_pipeline(self):
         _run_pipeline(self, gc_evaluate, gc_benchmark, gc_solve)
+
+    def test_qap_pipeline(self):
+        _run_pipeline(self, qap_evaluate, qap_benchmark, qap_solve)
 
 
 if __name__ == "__main__":

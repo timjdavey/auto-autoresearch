@@ -25,7 +25,7 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 
 ## Metric
 
-You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the greedy baseline, averaged across 3 representative instances (rand100e, rand100f, rand150a):
+You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the greedy baseline, averaged across 3 representative instances (rand150a, rand200a, rand200e):
 
 ```
 improvement = (baseline_colours - your_colours) / baseline_colours
@@ -37,5 +37,5 @@ A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes
 
 - **Time limit**: 60 seconds per `solve()` call.
 - **Trial timeout**: Your entire thinking process (reading, planning, editing, and running evaluation) must complete within **10 minutes**. If you exceed this, the trial is killed and counts as a failure.
-- **Single file**: All code in `train.py`. You may import from the standard library plus `numpy`, `scipy`, and `numba`.
+- **Single file**: All code in `train.py`. You may import from the standard library plus `numpy` and `scipy`.
 - **No hardcoding**: Your solver must work on arbitrary graphs. Do not detect which instance is being solved.
