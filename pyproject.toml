@@ -14,9 +14,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["supervisor", "scientist"]
-include = ["experiment.py"]
+include = ["experiment.py", "shutdown.py"]
 
 [project.scripts]
 experiment = "experiment:main"
 evaluate = "supervisor.evaluate:main"
 reset = "reset:main"
+shutdown = "shutdown:main"

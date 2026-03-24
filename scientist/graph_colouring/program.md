@@ -25,7 +25,7 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 
 ## Metric
 
-You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the greedy baseline, averaged across 3 representative instances (rand150a, rand200a, rand200e):
+You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the greedy baseline, averaged across 3 representative instances (rand300a, rand400a, rand300e):
 
 ```
 improvement = (baseline_colours - your_colours) / baseline_colours

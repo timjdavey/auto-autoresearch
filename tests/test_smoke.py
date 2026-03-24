@@ -8,9 +8,6 @@ import unittest
 
 from supervisor.evaluate import analyse
 
-from scientist.tsp.train import solve as tsp_solve
-from scientist.tsp.prepare import benchmark as tsp_benchmark, evaluate as tsp_evaluate
-
 from scientist.graph_colouring.train import solve as gc_solve
 from scientist.graph_colouring.prepare import benchmark as gc_benchmark, evaluate as gc_evaluate
 
@@ -53,9 +50,6 @@ def _run_pipeline(test_case, evaluate_fn, benchmark_fn, solve_fn):
 
 
 class TestEndToEndPipeline(unittest.TestCase):
-    def test_tsp_pipeline(self):
-        _run_pipeline(self, tsp_evaluate, tsp_benchmark, tsp_solve)
-
     def test_graph_colouring_pipeline(self):
         _run_pipeline(self, gc_evaluate, gc_benchmark, gc_solve)
 

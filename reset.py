@@ -9,7 +9,7 @@
 # Usage:
 #   uv run reset                              # hard reset (everything)
 #   uv run reset --soft                       # soft reset (all problems)
-#   uv run reset --soft --problems tsp        # soft reset (specific problems)
+#   uv run reset --soft --problems qap        # soft reset (specific problems)
 
 import argparse
 import shutil

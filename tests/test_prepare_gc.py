@@ -200,8 +200,8 @@ class TestInstanceData(unittest.TestCase):
 
     def test_random_instances_deterministic(self):
         from scientist.graph_colouring.prepare import _generate_random_instance
-        adj, n_nodes, n_edges = _generate_random_instance(75, 0.3, seed=173205)
-        self.assertEqual(adj, TRAIN_INSTANCES["rand75a"]["adj"])
+        adj, n_nodes, n_edges = _generate_random_instance(100, 0.3, seed=346410)
+        self.assertEqual(adj, TRAIN_INSTANCES["rand100a"]["adj"])
 
     def test_benchmark_have_optimal(self):
         for name, inst in BENCHMARK_INSTANCES.items():

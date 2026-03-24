@@ -1,5 +1,5 @@
 # train.py - TSP solver: ILS + 2-opt + or-opt(1-5) + Held-Karp for small n
-# Numba LNI + fast LS (2-opt+or-opt(1) for n>=700) + k=15 neighbors
+# Numba LNI + fast LS for n>=600 + k=15 + intensive final polish in last 5s
 
 import time
 import random
@@ -181,7 +181,7 @@ def _local_search(tour, pos, dist, neighbors, n, k):
 
 @njit(cache=True)
 def _local_search_fast(tour, pos, dist, neighbors, n, k):
-    # Fast LS for ILS: 2-opt + or-opt(1) only for n>=700; adds or-opt(2-3) for n<700
+    # Fast LS: 2-opt + or-opt(1) for n>=700; adds or-opt(2-3) for n<700
     prev = _tour_length(tour, dist, n)
     while True:
         tour = _two_opt_nn(tour, pos, dist, neighbors, n, k)
@@ -286,15 +286,14 @@ def solve(coords):
     dist = np.sqrt(dx*dx+dy*dy)
     if n <= 20:
         return _held_karp(dist, n).tolist()
-    # k=15 for n>=300: more iterations beats more neighbors (confirmed empirically)
     if n < 300: k = min(20, n-1)
     else: k = min(15, n-1)
     neighbors = _build_neighbors(dist, n, k)
     pos = np.zeros(n, dtype=np.int64)
-    deadline = time.perf_counter() + 55.0
+    # 59s total: ~54s fast ILS + ~5s intensive full-LS polish (within 66s grace)
+    deadline = time.perf_counter() + 59.0
+    intensive_start = deadline - 5.0
 
-    # Phase 1: full LS for n<600 (better starting point helps Phase2 efficiency)
-    # fast LS + 2s cap for n>=600 (preserve budget for more ILS iterations)
     p1_start = time.perf_counter()
     p1e = p1_start + (2.0 if n >= 600 else min(8.0, 55.0 * 0.15))
     p1_fn = _local_search_fast if n >= 600 else _local_search
@@ -310,25 +309,24 @@ def solve(coords):
             t = p1_fn(t, pos, dist, neighbors, n, k)
             tl = _tour_length(t, dist, n)
             if tl < best_len: best_len = tl; best_tour = t.copy()
-    p1_time = time.perf_counter() - p1_start
-    print(f"Phase1: {p1_time:.2f}s", flush=True)
+    print(f"Phase1: {time.perf_counter()-p1_start:.2f}s", flush=True)
 
-    # Phase 2: ILS cycling through double-bridge, greedy LNI (Numba), random LNI (Numba)
-    p2_start = time.perf_counter()
     stag = max(8, min(18, n // 30)); current = best_tour.copy(); cur_len = best_len
     no_imp = 0; nn_s = 1; restart_count = 0; perturb_mode = 0
-    k_lni_small = max(8, n // 8)
-    k_lni_large = max(15, n // 5)
-    k_lni_rand = max(20, n // 4)
-
-    iter_count = 0; ls_time = 0.0; perturb_time = 0.0; restart_ls_time = 0.0
-    ls_fn = _local_search_fast if n >= 600 else _local_search
+    k_lni_small = max(8, n // 8); k_lni_large = max(15, n // 5); k_lni_rand = max(20, n // 4)
+    fast_ls = _local_search_fast if n >= 600 else _local_search
+    iter_count = 0; ls_time = 0.0; perturb_time = 0.0; p3_iters = 0
 
     while time.perf_counter() < deadline - 1.0:
-        iter_count += 1
-        pt = time.perf_counter()
-        if perturb_mode == 0:
-            # True double-bridge 4-opt: A+D+C+B
+        now = time.perf_counter(); iter_count += 1
+        use_full = now > intensive_start
+
+        pt = now
+        if use_full:
+            pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
+            cand = np.concatenate([best_tour[:p1], best_tour[p3:], best_tour[p2:p3], best_tour[p1:p2]])
+            p3_iters += 1
+        elif perturb_mode == 0:
             pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
             cand = np.concatenate([current[:p1], current[p3:], current[p2:p3], current[p1:p2]])
         elif perturb_mode == 1:
@@ -336,40 +334,32 @@ def solve(coords):
             cand = _lni_greedy_nb(current, dist, n, k_use)
         else:
             cand = _lni_rand_nb(current, n, k_lni_rand)
-        perturb_mode = (perturb_mode + 1) % 3
+        if not use_full: perturb_mode = (perturb_mode + 1) % 3
         perturb_time += time.perf_counter() - pt
 
         lst = time.perf_counter()
+        ls_fn = _local_search if use_full else fast_ls
         cand = ls_fn(cand, pos, dist, neighbors, n, k)
         ls_time += time.perf_counter() - lst
         clen = _tour_length(cand, dist, n)
-        if clen < cur_len - 1e-10:
-            current = cand.copy(); cur_len = clen; no_imp = 0
-            if clen < best_len - 1e-10:
-                best_len = clen; best_tour = cand.copy()
-        else:
-            no_imp += 1
-            # SA-style weak acceptance when stagnated: escape shallow basins
-            if no_imp > stag // 2 and clen < cur_len * 1.003 and random.random() < 0.2:
-                current = cand.copy(); cur_len = clen
-
-        if no_imp >= stag:
-            if restart_count % 3 == 0:
-                t = _nn_tour(dist, n, nn_s % n); nn_s += 1
-            elif restart_count % 3 == 1:
-                pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
-                t = np.concatenate([best_tour[:p1], best_tour[p3:], best_tour[p2:p3], best_tour[p1:p2]])
+        if clen < best_len - 1e-10: best_len = clen; best_tour = cand.copy()
+        if not use_full:
+            if clen < cur_len - 1e-10:
+                current = cand.copy(); cur_len = clen; no_imp = 0
             else:
-                t = _lni_rand_nb(best_tour, n, min(n // 2, max(n // 5, 30)))
-            rst = time.perf_counter()
-            t = ls_fn(t, pos, dist, neighbors, n, k)
-            restart_ls_time += time.perf_counter() - rst
-            tl = _tour_length(t, dist, n)
-            if tl < best_len: best_len = tl; best_tour = t.copy()
-            current = t.copy(); cur_len = tl; no_imp = 0; restart_count += 1
+                no_imp += 1
+                if no_imp > stag // 2 and clen < cur_len * 1.003 and random.random() < 0.2:
+                    current = cand.copy(); cur_len = clen
+            if no_imp >= stag:
+                if restart_count % 3 == 0: t = _nn_tour(dist, n, nn_s % n); nn_s += 1
+                elif restart_count % 3 == 1:
+                    pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
+                    t = np.concatenate([best_tour[:p1], best_tour[p3:], best_tour[p2:p3], best_tour[p1:p2]])
+                else: t = _lni_rand_nb(best_tour, n, min(n // 2, max(n // 5, 30)))
+                t = fast_ls(t, pos, dist, neighbors, n, k)
+                tl = _tour_length(t, dist, n)
+                if tl < best_len: best_len = tl; best_tour = t.copy()
+                current = t.copy(); cur_len = tl; no_imp = 0; restart_count += 1
 
-    p2_time = time.perf_counter() - p2_start
-    print(f"Phase2: {p2_time:.2f}s, restarts: {restart_count}, iters: {iter_count}, ls: {ls_time:.2f}s, perturb: {perturb_time:.2f}s, restart_ls: {restart_ls_time:.2f}s", flush=True)
-    # Final polish with full local search to capture or-opt(4-5) improvements
-    best_tour = _local_search(best_tour, pos, dist, neighbors, n, k)
+    print(f"ILS: {iter_count}it, ls={ls_time:.1f}s, perturb={perturb_time:.1f}s, restarts={restart_count}, p3={p3_iters}", flush=True)
     return best_tour.tolist()

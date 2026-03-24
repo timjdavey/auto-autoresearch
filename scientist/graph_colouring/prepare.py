@@ -104,15 +104,15 @@ def _generate_random_instance(n_nodes: int, edge_prob: float, seed: int):
 
 
 TRAIN_INSTANCES = {
-    "rand75a":  {"adj": (d := _generate_random_instance(75,  0.3, seed=173205))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
     "rand100a": {"adj": (d := _generate_random_instance(100, 0.3, seed=346410))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand150a": {"adj": (d := _generate_random_instance(150, 0.4, seed=538516))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
     "rand200a": {"adj": (d := _generate_random_instance(200, 0.3, seed=600001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand200e": {"adj": (d := _generate_random_instance(200, 0.5, seed=700001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand300a": {"adj": (d := _generate_random_instance(300, 0.3, seed=800001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand400a": {"adj": (d := _generate_random_instance(400, 0.3, seed=900001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand300e": {"adj": (d := _generate_random_instance(300, 0.5, seed=1000001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
 }
 
 QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
-                   if k in ("rand150a", "rand200a", "rand200e")}
+                   if k in ("rand300a", "rand400a", "rand300e")}
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 
@@ -147,11 +147,11 @@ def _count_colours(colouring):
 # Precomputed: number of colours used by greedy on each training instance.
 # To recompute: run _greedy_solve on each instance and call _count_colours.
 GREEDY_BASELINES = {
-    "rand75a": 12,
     "rand100a": 14,
-    "rand150a": 24,
     "rand200a": 24,
-    "rand200e": 35,
+    "rand300a": 30,
+    "rand400a": 39,
+    "rand300e": 49,
 }
 
 # ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@ def benchmark(solve_fn) -> dict:
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 
-# Per-instance columns for each QUICK_INSTANCE (rand150a, rand200a, rand200e)
+# Per-instance columns for each QUICK_INSTANCE (rand300a, rand400a, rand300e)
 _INSTANCE_NAMES = list(QUICK_INSTANCES.keys())
 RESULT_FIELDS = (
     ["timestamp", "status", "avg_improvement", "training_time"]

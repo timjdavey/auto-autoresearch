@@ -419,8 +419,8 @@ class TestPrintReport(unittest.TestCase):
     def test_with_problem_name(self):
         buf = io.StringIO()
         with redirect_stdout(buf):
-            print_report(self._stats(), problem="tsp")
-        self.assertIn("[tsp]", buf.getvalue())
+            print_report(self._stats(), problem="qap")
+        self.assertIn("[qap]", buf.getvalue())
 
 
 if __name__ == "__main__":
