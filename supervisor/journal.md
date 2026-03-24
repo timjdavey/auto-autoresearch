@@ -73,3 +73,47 @@ A chronological log of studies — one entry per study, recording what changed, 
 2. **Time profiling unlocked the bottleneck:** Scientists could now see exactly which phase was burning time budget and could target that component
 3. **Complexity awareness pays off:** All three problems moved to better algorithmic foundations (Graph Colouring's color reduction became more sophisticated, QAP abandoned naive approach, TSP integrated advanced techniques like Held-Karp)
 4. **Cross-problem generality:** The same guidance changes helped all three problems, confirming the 4-point process in guidance.md is now generic enough to work across diverse problem types
+
+---
+
+### Study 3 — Edge cases + solver component measurement
+
+**Status:** Complete.
+
+**Guidance changes made:**
+1. ✅ Added explicit edge case detection: "If you see errors, isolate which specific instance/configuration triggers them...Re-run that case 3 times to check if it's non-deterministic."
+2. ✅ Added solver simplification audit: "If a component adds < 5% improvement but increases complexity or training time, consider removing it."
+3. ✅ Reemphasized simplicity principle: "Prefer a solver that works predictably at 80% efficiency over one that achieves 85% with high variance or occasional errors."
+
+**Trial counts:** Graph Colouring: 57 | QAP: 36 | TSP: 33
+
+**Key metrics:**
+- Graph Colouring: first=0.079 → last=0.191 (2.4× improvement), best=0.214, errors=0, avg_time=13.2s, improvement/trial=0.00196
+- QAP: first=0.113 → last=0.128 (1.1× improvement), best=0.130, errors=0, avg_time=120.9s, improvement/trial=0.00041, 7 timeouts
+- TSP: first=0.200 → last=0.200 (flat!), best=0.204, errors=0, avg_time=159.5s, improvement/trial=-0.000055, 6 timeouts
+- Aggregate: 42 trials, 0.000791 improvement/trial (was 0.0287), errors=0 (vs 1 in Study 2)
+
+**Per-trial efficiency (vs Study 2):**
+- Graph Colouring: 0.00196 improvement/trial (was 0.00258) — **24% regression in efficiency**
+- QAP: 0.00041 improvement/trial (was 0.0803) — **95× worse!** Catastrophic regression
+- TSP: -0.000055 improvement/trial (was 0.00325) — **negative improvement, completely flat**
+- Aggregate: 0.000791 improvement/trial (was 0.0287) — **36× worse!** Study 3 is massively regressed
+
+**What worked:**
+- **Zero errors!** All 3 problems completed without a single error (vs 1 error in Study 2). Edge case isolation guidance successfully eliminated errors.
+- **TSP stability:** Despite 6 timeouts, recovery was immediate. Solver is now stable.
+- **Graph Colouring execution speed:** Training time dropped 2.5× (32.8s → 13.2s). Simplification guidance made iterations faster.
+
+**What failed catastrophically:**
+1. **Efficiency collapsed:** 36× worse per-trial efficiency across aggregate. Scientists spent the study period on edge case detection and simplification audits instead of optimization. The 5% threshold was too conservative — scientists removed useful components or got stuck measuring rather than iterating.
+2. **QAP complete stagnation:** Improvement per trial is 0.00041 vs 0.0803 in Study 2. First value is much better (0.113 vs -3.252) but flat thereafter. Scientists hit plateau immediately after fixing any edge cases — no exploration phase.
+3. **TSP zero progress:** Improvement is negative (-0.000055). The solver learned nothing across 33 trials. Guidance focused on "stability" and "simplification" over "exploration" — solver got simpler but worse.
+4. **Guidance backfired:** The "5% threshold" and "simplicity wins" principles caused Scientists to prematurely halt exploration.
+
+**Learnings:**
+1. **Error elimination ≠ productivity:** Study 2's breakthrough (80× QAP gain) came from aggressive algorithmic redesign. Study 3 eliminated errors but lost all momentum. The 5% threshold prevented attempts at improvement unless nearly certain of >5% gain.
+2. **Edge case isolation consumes the budget:** Time spent on "measure components", "re-run 3 times to check", "isolate configurations" consumed trial budget. Scientists had fewer iterations for actual optimization.
+3. **Cross-problem divergence is extreme:** Graph Colouring regressed 24%, TSP regressed infinitely. Unified guidance struggles with diverse problem types.
+4. **"Simplicity wins" is premature:** Simplicity is good in production. In research, complexity that works beats simplicity that doesn't. This reemphasis killed the drive to improve.
+
+**Recommendation:** Rebalance for Study 4: keep error-detection guidance but remove 5% threshold and "simplicity wins" emphasis. Restore focus to efficiency. Consider time-budget split: "spend 20% on edge case verification, 80% on optimization."

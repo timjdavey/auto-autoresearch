@@ -4,13 +4,13 @@ train.py — QAP solver. THIS IS THE FILE THE AGENT MODIFIES.
 Contains a single function `solve(flow, distance)` that takes two square
 matrices and returns an assignment as a list of location indices.
 
-Current implementation: Greedy construction + 2-opt local search.
+Current implementation: identity permutation (baseline).
 The agent should improve this to maximise avg_improvement across all instances.
 """
 
+
 import time
 import random
-
 
 def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
     """
@@ -34,106 +34,140 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
         return [0]
 
     start_time = time.time()
-    time_limit = 55.0  # Leave 5s buffer for safety
+    time_limit = 58.0  # Leave 2s margin
 
     def compute_cost(assignment):
-        """Compute total QAP cost for given assignment."""
         cost = 0
         for i in range(n):
             for j in range(n):
                 cost += flow[i][j] * distance[assignment[i]][assignment[j]]
         return cost
 
-    def greedy_construction(randomized=False):
-        """Greedy nearest-neighbor construction."""
-        assignment = [-1] * n
-        used = [False] * n
-
-        for facility in range(n):
-            best_locs = []
-            best_cost_delta = float('inf')
-
-            for loc in range(n):
-                if used[loc]:
-                    continue
-
-                # Calculate cost increase if we assign facility to loc
-                cost_delta = 0
-                for i in range(n):
-                    if assignment[i] != -1:
-                        cost_delta += flow[facility][i] * distance[loc][assignment[i]]
-                        cost_delta += flow[i][facility] * distance[assignment[i]][loc]
-
-                if cost_delta < best_cost_delta:
-                    best_cost_delta = cost_delta
-                    best_locs = [loc]
-                elif randomized and cost_delta == best_cost_delta:
-                    best_locs.append(loc)
-
-            # Pick random location among tied best choices, or best if no ties
-            best_loc = random.choice(best_locs) if randomized and best_locs else (best_locs[0] if best_locs else 0)
-            assignment[facility] = best_loc
-            used[best_loc] = True
-
-        return assignment
-
-    def compute_swap_delta(assignment, i, j):
-        """Compute cost delta for swapping facilities i and j efficiently."""
-        delta = 0
-        loc_i = assignment[i]
-        loc_j = assignment[j]
-
-        # Cost change from swapping facilities i and j
+    def compute_cost_delta(assignment, i, j):
+        """Cost change if we swap facilities i and j."""
+        cost = 0
         for k in range(n):
-            if k == i or k == j:
-                continue
-            loc_k = assignment[k]
-            delta += flow[i][k] * (distance[loc_j][loc_k] - distance[loc_i][loc_k])
-            delta += flow[k][i] * (distance[loc_k][loc_j] - distance[loc_k][loc_i])
-            delta += flow[j][k] * (distance[loc_i][loc_k] - distance[loc_j][loc_k])
-            delta += flow[k][j] * (distance[loc_k][loc_i] - distance[loc_k][loc_j])
-
-        # Cost change between facilities i and j themselves
-        delta += flow[i][j] * (distance[loc_j][loc_i] - distance[loc_i][loc_j])
-        delta += flow[j][i] * (distance[loc_i][loc_j] - distance[loc_j][loc_i])
-
-        return delta
+            if k != i and k != j:
+                cost += flow[i][k] * (distance[assignment[j]][assignment[k]] - distance[assignment[i]][assignment[k]])
+                cost += flow[k][i] * (distance[assignment[k]][assignment[j]] - distance[assignment[k]][assignment[i]])
+                cost += flow[j][k] * (distance[assignment[i]][assignment[k]] - distance[assignment[j]][assignment[k]])
+                cost += flow[k][j] * (distance[assignment[k]][assignment[i]] - distance[assignment[k]][assignment[j]])
+        cost += flow[i][j] * (distance[assignment[j]][assignment[j]] - distance[assignment[i]][assignment[i]])
+        cost += flow[j][i] * (distance[assignment[i]][assignment[i]] - distance[assignment[j]][assignment[j]])
+        return cost
 
     def local_search_2opt(assignment):
-        """Apply 2-opt local search: multiple passes until convergence."""
-        max_passes = 10
-        for pass_num in range(max_passes):
-            if time.time() - start_time > time_limit:
-                break
+        """Apply 2-opt local search until convergence or time limit."""
+        improved = True
+        iterations = 0
+        dont_look_bits = [False] * n  # Don't-look bits optimization
+
+        while improved and (time.time() - start_time) < time_limit:
             improved = False
+            iterations += 1
+
             for i in range(n):
-                if time.time() - start_time > time_limit:
+                if (time.time() - start_time) >= time_limit:
                     break
+                if dont_look_bits[i]:
+                    continue
+                dont_look_bits[i] = True
+
                 for j in range(i + 1, n):
-                    delta = compute_swap_delta(assignment, i, j)
+                    delta = compute_cost_delta(assignment, i, j)
                     if delta < 0:
                         assignment[i], assignment[j] = assignment[j], assignment[i]
                         improved = True
-            if not improved:
-                break
+                        dont_look_bits[i] = False
+                        dont_look_bits[j] = False
+                        break
+                if improved:
+                    break
 
+            if improved:
+                dont_look_bits = [False] * n  # Reset for next iteration
         return assignment
 
-    # Try multiple greedy constructions
-    best_assignment = greedy_construction(randomized=False)
-    best_assignment = local_search_2opt(best_assignment)
-    best_cost = compute_cost(best_assignment)
+    def perturbation(assignment):
+        """Apply random perturbation to escape local optimum."""
+        perm = assignment[:]
+        # Adaptive perturbation: use more swaps based on problem size
+        k = max(3, n // 8)  # More aggressive for better diversification
+        for _ in range(k):
+            i = random.randint(0, n - 1)
+            j = random.randint(0, n - 1)
+            if i != j:
+                perm[i], perm[j] = perm[j], perm[i]
+        return perm
 
-    # Try 1-2 randomized greedy constructions if time permits
-    for attempt in range(2):
-        if time.time() - start_time > time_limit - 5:
+    def nearest_neighbor_init(seed_facility=0):
+        """Greedy nearest-neighbor construction (faster variant with sampled candidates)."""
+        assignment = [-1] * n
+        used_locations = [False] * n
+        assignment[seed_facility] = 0
+        used_locations[0] = True
+
+        for facility in range(n):
+            if assignment[facility] != -1:
+                continue
+            best_loc = -1
+            best_cost = float('inf')
+
+            # For large problems, sample candidates instead of evaluating all
+            candidates = [loc for loc in range(n) if not used_locations[loc]]
+            if len(candidates) > 20:
+                import random as _random
+                sample_size = min(20, len(candidates))
+                candidates = _random.sample(candidates, sample_size)
+
+            for loc in candidates:
+                # Cost of assigning facility to loc
+                cost = 0
+                for other_facility in range(n):
+                    if assignment[other_facility] != -1:
+                        other_loc = assignment[other_facility]
+                        cost += flow[facility][other_facility] * distance[loc][other_loc]
+                        cost += flow[other_facility][facility] * distance[other_loc][loc]
+                if cost < best_cost:
+                    best_cost = cost
+                    best_loc = loc
+            assignment[facility] = best_loc
+            used_locations[best_loc] = True
+        return assignment
+
+    best_assignment = None
+    best_cost = float('inf')
+
+    # Iterated local search: try multiple initialization seeds for better starting point
+    for seed_facility in range(min(5, n)):  # Try up to 5 different starting facilities
+        if (time.time() - start_time) >= time_limit:
             break
-
-        assignment = greedy_construction(randomized=True)
+        assignment = nearest_neighbor_init(seed_facility)
         assignment = local_search_2opt(assignment)
         cost = compute_cost(assignment)
         if cost < best_cost:
             best_cost = cost
-            best_assignment = assignment
+            best_assignment = assignment[:]
 
-    return best_assignment
+    # Iterate: perturb and improve
+    iterations = 0
+    no_improve_count = 0
+    while (time.time() - start_time) < time_limit:
+        iterations += 1
+        # Perturb current best solution
+        assignment = perturbation(best_assignment)
+        # Local search
+        assignment = local_search_2opt(assignment)
+        cost = compute_cost(assignment)
+        # Update best if improved
+        if cost < best_cost:
+            best_cost = cost
+            best_assignment = assignment[:]
+            no_improve_count = 0
+        else:
+            no_improve_count += 1
+        # Exit early if no improvement for many iterations
+        if no_improve_count > 12:
+            break
+
+    return best_assignment if best_assignment is not None else list(range(n))

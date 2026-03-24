@@ -51,7 +51,36 @@ RED FLAG that you need to given seperate advice for each problem.
 
 **Results:** Massive success. 20× improvement in per-trial efficiency, 80-100× gains in QAP/TSP. Scientists went from silent failure to active diagnosis and algorithmic redesign.
 
-**Study 3 direction:** Build on proven diagnostic approach. Next focus: handle edge cases and error modes (TSP still has 22% error rate) and optimize solver stability across instance scales.
+---
+
+## Study 3 Plan (completed — FAILED)
+
+**Focus:** Edge case isolation + solver component measurement.
+
+**Results:** Catastrophic regression. Error rate dropped to zero, but per-trial efficiency collapsed 36× (0.0287 → 0.000791). QAP/TSP went nearly flat. The 5% simplification threshold was too conservative; Scientists spent time measuring rather than optimizing.
+
+**Root cause:** Guidance prioritized "stability and simplicity" over "exploration and improvement." The time-budget trade-off was inverted: measuring edge cases consumed resources that should have gone to optimization.
+
+**Why it failed:** Research mode and production mode have opposite goals. In research, a 90% reliable solver that improves 10× is better than a 99% reliable solver that doesn't improve. The "5% threshold" principle prevented Scientists from trying ideas with uncertain payoff — exactly the wrong incentive for exploration.
+
+---
+
+## Study 4 Plan (planned)
+
+**Focus:** Restore exploration velocity while keeping error detection.
+
+**Rationale:**
+- Study 2 showed aggressive algorithmic redesign works (80× QAP gain). Study 3's defensive posture killed momentum.
+- TSP/QAP errors are now rare; we can afford to prioritize improvement over stability.
+- Cross-problem divergence (Graph Colouring thrives with multi-start; QAP needs 2-opt; TSP needs advanced LS) suggests guidance should be less prescriptive on algorithm choice, more prescriptive on measurement discipline.
+
+**Changes to guidance.md:**
+1. **Remove the 5% simplification threshold.** Replace with: "Measure contribution of each component, but try improvements even with uncertain payoff. You learn from failures."
+2. **Split time budget explicitly:** "Use the first 20% of your trials for edge case detection and profile measurements. Use the remaining 80% for aggressive exploration and optimization."
+3. **Reframe "simplicity":** Change from "prefer 80% reliable" to "if two solvers achieve similar quality, choose the simpler one. But don't sacrifice quality for simplicity."
+4. **Restore exploration language:** "Diversity matters. Try multi-start initialization, larger neighborhoods, new algorithm combinations. Cross-problem learning from archive/ may suggest approaches."
+
+**Expected outcome:** Per-trial efficiency back to Study 2 levels (0.01+), errors stay low (<5%), TSP/QAP resume learning curves.
 
 ## Abandoned
 
