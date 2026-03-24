@@ -26,7 +26,7 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 
 ## Metric
 
-You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the nearest-neighbour baseline, averaged across 3 representative instances (rand20a, rand75a, rand150a):
+You are optimising **`avg_improvement`** (higher is better) — how much better your solver is than the nearest-neighbour baseline, averaged across 3 representative instances (rand100a, rand150a, rand200a):
 
 ```
 improvement = (baseline_length - your_tour_length) / baseline_length
@@ -36,7 +36,7 @@ A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes
 
 ## Constraints
 
-- **Time limit**: 30 seconds per `solve()` call.
+- **Time limit**: 60 seconds per `solve()` call.
 - **Trial timeout**: Your entire thinking process (reading, planning, editing, and running evaluation) must complete within **10 minutes**. If you exceed this, the trial is killed and counts as a failure.
 - **Single file**: All code in `train.py`. You may import from the standard library plus `numpy`, `scipy`, and `numba`.
 - **No hardcoding**: Your solver must work on arbitrary coordinates. Do not detect which instance is being solved.

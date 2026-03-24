@@ -25,14 +25,14 @@ Follow only the phase indicated in your prompt.
 
 ### 1. Read your history
 
-Read `supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`, and `supervisor/study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed. Pay attention to per-problem breakdowns — if improvement diverges across problems, your guidance may be too domain-specific.
+Read `supervisor/journal.md`, `supervisor/ideas.md` and `supervisor/study_results.csv` (if they exist). Understand what has been tried, what worked, and what failed. Pay attention to per-problem breakdowns — if improvement diverges across problems, your guidance may be too domain-specific.
 
 ### First study — establish a baseline
 
 If `supervisor/study_results.csv` does not exist (or is empty), this is your first study. You MUST run it as a **no-intervention baseline**:
 
 - Do NOT modify `scientist/guidance.md` at all.
-- Initialise your persistent files (`supervisor/journal.md`, `supervisor/ideas.md`, `supervisor/reflections.md`) with a brief note that Study 1 is an unmodified baseline.
+- Initialise your persistent files (`supervisor/journal.md`, `supervisor/ideas.md`) with a brief note that Study 1 is an unmodified baseline.
 - Skip steps 2 and 3 below and proceed directly to Post Study.
 
 The baseline study measures how Scientists perform with no Supervisor guidance. All future improvements will be measured against this. Without a clean baseline, you cannot distinguish your contributions from the Scientists' inherent capability.
@@ -42,7 +42,6 @@ The baseline study measures how Scientists perform with no Supervisor guidance. 
 Review and update your persistent files before the study runs:
 
 - **`supervisor/ideas.md`** — review and update your ideas for improving the scientists. Promote, demote, or add hypotheses based on what you've learned.
-- **`supervisor/reflections.md`** — reflect on your own process as a supervisor. What's working? What would you do differently?
 - **`supervisor/journal.md`** — note your study plan (what you intend to change and why).
 
 ### 3. Update guidance
@@ -94,7 +93,7 @@ A fresh Supervisor is invoked for each phase, so make sure to write in them to c
 
 **`supervisor/ideas.md`** — Strategies, hypotheses, and observations about how the scientists do discovery. What approaches work, what failed, what to try next. Think generically — what helps across all problems? Organise however helps you think clearly.
 
-**`supervisor/reflections.md`** — Meta-process reflections on how you approach study planning, what's working about your own methodology, and what you'd tell your future self. Evolve the format as you learn what works.
+**`supervisor/reflections.md`** — Proposals for changes to the experimental setup that you cannot make yourself (because the files are locked). What would you change about the infrastructure if you could? See the Study reflection section below for details.
 
 
 ## Post-study phase
@@ -135,13 +134,15 @@ Update your persistent files with what you learned:
 **`supervisor/journal.md`** — Complete your study entry. Include:
 
 - **Changes made:** what you actually changed in scientist/guidance.md
-- **Result:** key metrics from supervisor/study_results.csv (total improvement, velocity, tailing off) — per-problem and aggregate
+- **Result:** key metrics from supervisor/study_results.csv (best_avg_improvement, total improvement, stdev, velocity, tailing off) — per-problem and aggregate
 - **Analysis:** what worked across all problems, what only helped some, and why
 - **Learnings:** takeaways that should inform the next study
 
 **`supervisor/ideas.md`** — Ideas to improve the Scientists process. Update your ideas based on the results. What's proven, what's promising, what should be abandoned?
 
-**`supervisor/reflections.md`** — Ideas to improve your own process. Reflect on your own process: did your planning approach work well this study? Would you approach the next study differently?
+**`supervisor/reflections.md`** — Proposals for changes to the experimental setup that you cannot make yourself (because the files are locked). Do NOT summarise study results here (that belongs in journal.md). Instead, think about what you would change about the infrastructure if you could (evaluation metrics, problem difficulty, trial count, trial timeout etc). And what you might change about the `supervisor/method.md` file.
+
+These are effectively requests you would make to a human operator to improve the experiment. Be specific and justify each proposal with evidence from your studies.
 
 Be honest about failures. A study that taught you something is not wasted.
 

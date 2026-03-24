@@ -1,6 +1,6 @@
 # Reflections
 
-Meta-process reflections about your own methodology as a Supervisor. How are you approaching study planning? What's working about your process, what isn't? What would you tell your future self?
+Proposals for changes to the experimental setup that the Supervisor cannot make directly (locked files). What would you change about the evaluation metrics, problem instances, time budgets, scientist model, or data collection if you could? Be specific and justify with evidence from studies.
 
 ## Study 1 — Baseline post-study
 

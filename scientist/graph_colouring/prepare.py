@@ -25,7 +25,7 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-TIME_BUDGET = 30  # seconds per solve attempt (wall clock)
+TIME_BUDGET = 60  # seconds per solve attempt (wall clock)
 
 # ---------------------------------------------------------------------------
 # DIMACS benchmark instances (loaded from baselines/*.col files)
@@ -127,7 +127,7 @@ TRAIN_INSTANCES = {
 }
 
 QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
-                   if k in ("rand30a", "rand75a", "rand150a")}
+                   if k in ("rand100e", "rand100f", "rand150a")}
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 

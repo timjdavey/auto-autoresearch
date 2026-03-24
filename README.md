@@ -77,3 +77,20 @@ uv run pytest
 # 4. Run the Supervisor to build on that
 uv run experiment
 ```
+
+
+## Learnings
+
+`reflections.md` contains requests from the Supervisor of what to change about this entire experimental setup. Things we've learnt along the way.
+
+- The Supervisor (& Scientists) really struggle with self-reflection. They tend to focus too much on the facts about what they did, rather than thinking about how they can change their own processes. This feels similar to how humans are poor at expressing their needs as JTBD. However, humans are good at making concrete feature requests, which is what the Supervisor now does in `reflections.md`. **Maybe we should introduce a third interviewer layer?**
+- Identical replications don't add enough value for their cost at this stage. We're not looking for statistical significance, we're playing at the boundary of simplicity & optimisation.
+- Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal.
+- Gemini CLI just can't operate in this mode.
+- 
+
+
+
+- Study.py no longer cli
+- Evaluate refactor
+- 

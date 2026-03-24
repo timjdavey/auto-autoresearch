@@ -30,7 +30,7 @@ from pathlib import Path
 from cli import build_cmd
 from scientist import SCIENTIST_DIR, discover_problems
 from reset import soft_reset
-from supervisor.evaluate import analyse_and_save, load_results
+from supervisor.evaluate import load_results
 
 DEFAULT_MODEL = "haiku"
 DEFAULT_TRIALS = 10
@@ -198,10 +198,6 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         for future in as_completed(futures):
             future.result()  # propagate exceptions
 
-    try:
-        analyse_and_save(timestamp=timestamp)
-    except Exception as e:
-        print(f"  Warning: analyse_and_save failed: {e}", file=sys.stderr)
     return log_dir
 
 

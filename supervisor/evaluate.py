@@ -8,6 +8,7 @@ Usage:
 """
 
 import csv
+import math
 import os
 import sys
 from datetime import datetime
@@ -48,10 +49,29 @@ def load_results(results_path=None):
 def analyse(rows):
     """Compute study metrics. Returns dict with analysis results."""
     n = len(rows)
-    first = rows[0]["avg_improvement"]
-    last = rows[-1]["avg_improvement"]
+    improvements = [r["avg_improvement"] for r in rows]
+    first = improvements[0]
+    last = improvements[-1]
     total_improvement = last - first
     improvement_per_trial = total_improvement / n if n > 0 else 0.0
+
+    # Best / worst (exclude crash penalties where avg_improvement < -1)
+    valid_improvements = [v for v in improvements if v > -1]
+    best_avg_improvement = max(valid_improvements) if valid_improvements else max(improvements)
+    worst_avg_improvement = min(valid_improvements) if valid_improvements else min(improvements)
+    best_trial = improvements.index(best_avg_improvement) + 1  # 1-indexed
+
+    # Standard deviation
+    if n >= 2 and valid_improvements:
+        mean = sum(valid_improvements) / len(valid_improvements)
+        variance = sum((v - mean) ** 2 for v in valid_improvements) / (len(valid_improvements) - 1)
+        stdev_avg_improvement = math.sqrt(variance)
+    else:
+        stdev_avg_improvement = 0.0
+
+    # Error count (rows that were filtered out by load_results are already gone,
+    # but we can count crash penalties still present)
+    num_errors = sum(1 for v in improvements if v <= -1)
 
     # Final 20% velocity
     tail_start = max(1, n - max(1, n // 5))  # at least 1 trial in tail
@@ -67,6 +87,11 @@ def analyse(rows):
         "num_trials": n,
         "first_avg_improvement": first,
         "last_avg_improvement": last,
+        "best_avg_improvement": best_avg_improvement,
+        "worst_avg_improvement": worst_avg_improvement,
+        "stdev_avg_improvement": stdev_avg_improvement,
+        "best_trial": best_trial,
+        "num_errors": num_errors,
         "total_improvement": total_improvement,
         "improvement_per_trial": improvement_per_trial,
         "tail_trials": tail_trials,
@@ -79,9 +104,12 @@ def analyse(rows):
 def print_report(stats, problem=None):
     """Print a human-readable summary."""
     prefix = f"[{problem}] " if problem else ""
-    print(f"{prefix}Trials: {stats['num_trials']}")
+    print(f"{prefix}Trials: {stats['num_trials']}  (errors: {stats['num_errors']})")
     print(f"{prefix}First avg_improvement: {stats['first_avg_improvement']:.6f}")
     print(f"{prefix}Last  avg_improvement: {stats['last_avg_improvement']:.6f}")
+    print(f"{prefix}Best  avg_improvement: {stats['best_avg_improvement']:.6f}  (trial {stats['best_trial']})")
+    print(f"{prefix}Worst avg_improvement: {stats['worst_avg_improvement']:.6f}")
+    print(f"{prefix}Stdev avg_improvement: {stats['stdev_avg_improvement']:.6f}")
     print()
     print(f"{prefix}Total improvement:       {stats['total_improvement']:+.6f}")
     print(f"{prefix}Improvement per trial:   {stats['improvement_per_trial']:+.6f}")
@@ -100,6 +128,8 @@ def print_report(stats, problem=None):
 STUDY_FIELDS = [
     "timestamp", "problem", "num_trials",
     "first_avg_improvement", "last_avg_improvement",
+    "best_avg_improvement", "worst_avg_improvement",
+    "stdev_avg_improvement", "best_trial", "num_errors",
     "total_improvement", "improvement_per_trial",
     "tail_trials", "tail_velocity", "overall_velocity", "tailing_off",
 ]
@@ -134,6 +164,8 @@ def analyse_and_save(timestamp=None, output_path=None):
     # Compute aggregate (mean across problems)
     agg_keys = [
         "num_trials", "first_avg_improvement", "last_avg_improvement",
+        "best_avg_improvement", "worst_avg_improvement",
+        "stdev_avg_improvement", "best_trial", "num_errors",
         "total_improvement", "improvement_per_trial",
         "tail_trials", "tail_velocity", "overall_velocity",
     ]
@@ -141,9 +173,9 @@ def analyse_and_save(timestamp=None, output_path=None):
     aggregate = {}
     for key in agg_keys:
         aggregate[key] = sum(s[key] for s in all_stats.values()) / n_problems
-    # Round num_trials and tail_trials for aggregate
-    aggregate["num_trials"] = round(aggregate["num_trials"])
-    aggregate["tail_trials"] = round(aggregate["tail_trials"])
+    # Round integer fields for aggregate
+    for key in ("num_trials", "tail_trials", "best_trial", "num_errors"):
+        aggregate[key] = round(aggregate[key])
     # Tailing off: True if any problem is tailing off
     tailing_values = [s["tailing_off"] for s in all_stats.values() if s["tailing_off"] is not None]
     aggregate["tailing_off"] = any(tailing_values) if tailing_values else None

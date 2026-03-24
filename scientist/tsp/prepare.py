@@ -27,7 +27,7 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-TIME_BUDGET = 30  # seconds per solve attempt (wall clock)
+TIME_BUDGET = 60  # seconds per solve attempt (wall clock)
 
 # ---------------------------------------------------------------------------
 # TSPLIB benchmark instances (loaded from baselines/*.tsp files)
@@ -107,7 +107,7 @@ TRAIN_INSTANCES = {
 }
 
 QUICK_INSTANCES = {k: v for k, v in TRAIN_INSTANCES.items()
-                   if k in ("rand20a", "rand75a", "rand150a")}
+                   if k in ("rand100a", "rand150a", "rand200a")}
 
 INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
 

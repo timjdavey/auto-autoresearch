@@ -25,7 +25,7 @@ from pathlib import Path
 
 from cli import build_cmd
 from scientist import SCIENTIST_DIR, discover_problems
-from reset import soft_reset
+
 from supervisor.evaluate import analyse_and_save
 from supervisor.studies import run_study
 
@@ -85,9 +85,6 @@ def run_experiment(num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIME
             archive_dir = Path("archive") / study_timestamp
             shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
             print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
-
-            # Reset each problem's train.py to baseline and delete ephemeral results
-            soft_reset(problems)
 
             # Git commit current state
             result = subprocess.run(["git", "add", "-A"], capture_output=True, text=True)

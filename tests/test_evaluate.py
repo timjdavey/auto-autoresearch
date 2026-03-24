@@ -35,6 +35,10 @@ class TestAnalyse(unittest.TestCase):
         self.assertAlmostEqual(stats["last_avg_improvement"], 0.05)
         self.assertAlmostEqual(stats["total_improvement"], 0.05)
         self.assertAlmostEqual(stats["improvement_per_trial"], 0.025)
+        self.assertAlmostEqual(stats["best_avg_improvement"], 0.05)
+        self.assertAlmostEqual(stats["worst_avg_improvement"], 0.0)
+        self.assertEqual(stats["best_trial"], 2)
+        self.assertEqual(stats["num_errors"], 0)
 
     def test_monotonically_improving(self):
         rows = [_row(i * 0.01) for i in range(10)]
@@ -82,6 +86,23 @@ class TestAnalyse(unittest.TestCase):
         self.assertAlmostEqual(stats["total_improvement"], 0.0)
         self.assertAlmostEqual(stats["tail_velocity"], 0.0)
         self.assertAlmostEqual(stats["overall_velocity"], 0.0)
+        self.assertAlmostEqual(stats["best_avg_improvement"], 0.05)
+        self.assertAlmostEqual(stats["stdev_avg_improvement"], 0.0)
+
+    def test_best_worst_with_crash_penalty(self):
+        rows = [_row(0.05), _row(-10.0), _row(0.10), _row(0.08)]
+        stats = analyse(rows)
+        # Best/worst exclude crash penalties (< -1)
+        self.assertAlmostEqual(stats["best_avg_improvement"], 0.10)
+        self.assertAlmostEqual(stats["worst_avg_improvement"], 0.05)
+        self.assertEqual(stats["best_trial"], 3)
+        self.assertEqual(stats["num_errors"], 1)
+
+    def test_stdev_with_variance(self):
+        rows = [_row(0.0), _row(0.10), _row(0.20)]
+        stats = analyse(rows)
+        self.assertAlmostEqual(stats["best_avg_improvement"], 0.20)
+        self.assertGreater(stats["stdev_avg_improvement"], 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +315,11 @@ class TestPrintReport(unittest.TestCase):
             "num_trials": 10,
             "first_avg_improvement": 0.0,
             "last_avg_improvement": 0.09,
+            "best_avg_improvement": 0.09,
+            "worst_avg_improvement": 0.0,
+            "stdev_avg_improvement": 0.03,
+            "best_trial": 10,
+            "num_errors": 0,
             "total_improvement": 0.09,
             "improvement_per_trial": 0.009,
             "tail_trials": 2,
