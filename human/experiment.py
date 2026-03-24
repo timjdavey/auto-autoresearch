@@ -23,7 +23,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from cli import build_cmd
+from human.cli import build_cmd
 from scientist import SCIENTIST_DIR, discover_problems
 
 from supervisor.evaluate import analyse_and_save

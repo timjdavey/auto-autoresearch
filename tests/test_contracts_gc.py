@@ -6,7 +6,7 @@ still satisfies the interface that prepare.py expects.
 
 import unittest
 
-from scientist.graph_colouring.prepare import (
+from scientist.gc.prepare import (
     TRAIN_INSTANCES,
     _generate_random_instance,
     validate_colouring,
@@ -16,9 +16,9 @@ from scientist.graph_colouring.prepare import (
 def _get_solve():
     """Import solve fresh to pick up whatever the Scientist wrote."""
     import importlib
-    import scientist.graph_colouring.train
-    importlib.reload(scientist.graph_colouring.train)
-    return scientist.graph_colouring.train.solve
+    import scientist.gc.train
+    importlib.reload(scientist.gc.train)
+    return scientist.gc.train.solve
 
 
 _solve = _get_solve()

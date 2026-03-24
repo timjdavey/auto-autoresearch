@@ -4,16 +4,12 @@ import unittest
 
 import scientist.qap.prepare as prepare
 from scientist.qap.prepare import (
-    BENCHMARK_INSTANCES,
     IDENTITY_BASELINES,
-    INSTANCES,
-    QUICK_INSTANCES,
     TIME_BUDGET,
     TRAIN_INSTANCES,
     _identity_cost,
     _run_solver,
     assignment_cost,
-    benchmark,
     evaluate,
     validate_assignment,
 )
@@ -149,7 +145,7 @@ class TestEvaluate(unittest.TestCase):
         results = evaluate(lambda f, d: list(range(len(f))))
         self.assertIn("avg_improvement", results)
         self.assertAlmostEqual(results["avg_improvement"], 0.0, places=5)
-        for name in QUICK_INSTANCES:
+        for name in TRAIN_INSTANCES:
             self.assertTrue(results[name]["valid"])
 
     def test_crashing_solver(self):
@@ -158,41 +154,14 @@ class TestEvaluate(unittest.TestCase):
 
         results = evaluate(bad_solver)
         self.assertAlmostEqual(results["avg_improvement"], -10.0)
-        for name in QUICK_INSTANCES:
+        for name in TRAIN_INSTANCES:
             self.assertFalse(results[name]["valid"])
 
     def test_result_keys(self):
         results = evaluate(lambda f, d: list(range(len(f))))
         self.assertIn("avg_improvement", results)
         self.assertIn("total_time", results)
-        for name in QUICK_INSTANCES:
-            self.assertIn(name, results)
-
-
-# ---------------------------------------------------------------------------
-# benchmark
-# ---------------------------------------------------------------------------
-
-class TestBenchmark(unittest.TestCase):
-    def test_with_identity_solver(self):
-        results = benchmark(lambda f, d: list(range(len(f))))
-        self.assertIn("avg_loss", results)
-        self.assertGreater(results["avg_loss"], 0)  # identity is worse than best-known
-        for name in BENCHMARK_INSTANCES:
-            self.assertTrue(results[name]["valid"])
-
-    def test_crashing_solver(self):
-        def bad_solver(f, d):
-            raise RuntimeError("crash")
-
-        results = benchmark(bad_solver)
-        self.assertAlmostEqual(results["avg_loss"], 10.0)
-
-    def test_result_keys(self):
-        results = benchmark(lambda f, d: list(range(len(f))))
-        self.assertIn("avg_loss", results)
-        self.assertIn("total_time", results)
-        for name in BENCHMARK_INSTANCES:
+        for name in TRAIN_INSTANCES:
             self.assertIn(name, results)
 
 
@@ -202,24 +171,12 @@ class TestBenchmark(unittest.TestCase):
 
 class TestInstanceData(unittest.TestCase):
     def test_counts(self):
-        self.assertEqual(len(TRAIN_INSTANCES), 5)
-        self.assertEqual(len(BENCHMARK_INSTANCES), 5)
-        self.assertEqual(len(INSTANCES), 10)
-
-    def test_quick_instances(self):
-        self.assertEqual(len(QUICK_INSTANCES), 3)
-        for name in QUICK_INSTANCES:
-            self.assertIn(name, TRAIN_INSTANCES)
+        self.assertEqual(len(TRAIN_INSTANCES), 3)
 
     def test_random_instances_deterministic(self):
         from scientist.qap.prepare import _generate_random_instance
-        flow, distance = _generate_random_instance(20, seed=142857)
-        self.assertEqual(flow, TRAIN_INSTANCES["rand20a"]["flow"])
-
-    def test_benchmark_have_optimal(self):
-        for name, inst in BENCHMARK_INSTANCES.items():
-            self.assertIsNotNone(inst["optimal"], f"{name} missing optimal")
-            self.assertTrue(inst["known"], f"{name} should be known")
+        flow, distance = _generate_random_instance(50, seed=314159)
+        self.assertEqual(flow, TRAIN_INSTANCES["rand50a"]["flow"])
 
     def test_train_no_optimal(self):
         for name, inst in TRAIN_INSTANCES.items():

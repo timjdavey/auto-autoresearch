@@ -31,7 +31,13 @@ There are two layers to the system:
 Key files:
 
 ```
-experiment.py       - Starts the supervisor loop (human-only edit)
+scientist/
+    guidance.md     - on how to run the scientific process (viewed by all scientists, edited by supervisor)
+    {problem}/
+        train.py    - standard autoresearch, code written by Scientist
+        prepare.py  - standard autoresearch, does evaluation etc.
+        program.md  - now contains only very specific details about problem, guidance.md instructs flow
+        memory.md   - Scientists are invoked per trial, so need a persistent store outside of their context
 supervisor/
     studies.py      - runs a round of scientist studies (human-only edit)
     evaluate.py     - evaluates a study (human-only edit)
@@ -39,9 +45,11 @@ supervisor/
     journal.md      - chronological study log (supervisor views & edits)
     ideas.md        - ideas for improving scientists processes (supervisor views & edits)
     reflections.md  - ideas for improving supervisor processes (supervisor views & edits)
-scientist/
-    guidance.md     - on how to run the scientific process (viewed by all scientists, edited by supervisor)
-    {problem}/      - subdirectories with autoresearch train.py, prepare.py, program.md, etc.
+human/
+    experiment.py   - starts the supervisor loop
+    cli.py          - CLI command builder (abstracts Claude vs Codex)
+    reset.py        - reset utilities for clearing experiment/study state
+    shutdown.py     - kills all running scientist/experiment processes
 ```
 
 The most interesting ones to review are `supervisor/journal.md`, `supervisor/ideas.md`, and `supervisor/reflections.md`.
@@ -50,18 +58,20 @@ The most interesting ones to review are `supervisor/journal.md`, `supervisor/ide
 ## Problem experiments
 
 Chosen problems:
-- Graph colouring
-- Quadratic assignment problem (QAP)
+- Graph colouring (gc)
+- Quadratic assignment problem (qap)
+- Maximum satisfiability (maxsat)
+- Linear ordering problem (lop)
+- Facility location, uncapacitated (facloc)
 
 We chose these as we want:
 - Cheap: to evaluate (CPU-friendly)
 - Context contained: can be run in a single python file
 - Hardware independant: scalar metric, not time based
-- Effective depth: large *effective* optimisation landscape under LLM + time constraints (not just theoretical landscape size)
-- Continuous metric: fine-grained improvement signal with many achievable levels, not discrete jumps
-- No memorised dominant algorithm: the LLM shouldn't be able to recall a single well-known heuristic that immediately solves the problem — it should need to genuinely explore
-- Algorithmic diversity within time budget: multiple fundamentally different approaches must be viable within the solve time limit
-
+- Continuous metric, not discrete jumps
+- No LLM memorised dominant algorithm or well-known heuristic 
+- Algorithmic diversity within time budget (this is the most important, is there huge room for creativity or just a single obvious path)
+- Awkard tool use e.g. numpy to help but not much. Stops reliance on easy vectorization and instead invest in metaheuristics, smart neighborhood structures, or novel ways to evaluate "deltas".
 
 ## Quick start
 
@@ -79,6 +89,9 @@ uv run pytest
 
 # 4. Run the Supervisor to build on that
 uv run experiment
+
+# 5. Kill all running scientist/experiment processes
+uv run shutdown
 ```
 
 
@@ -92,5 +105,5 @@ uv run experiment
 - Supervisor was reluctant to suggest anything radical like introducing a "MEMORY.md" even when heavily prompted. At first it was frustrating as limits the experimental evolution. But in retrospect it's great, as means we can pick up the requests from `reflections.md` and conciously add infrastructure complexity.
 - Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal. But at the same time, not _too_ many otherwise you can't see any plateau and difference with the `guidance.md`.
 - More tools (particularly numba) decreased creativity and optionality of paths of Scientists, so removed and kept dependancies small (like original autoresearch).
-- TSP was removed after 3 studies showed it produced the worst signal. Despite having a vast theoretical optimisation landscape, it has a tiny *effective* landscape: LLMs converge to the same memorised dominant heuristic (nearest-neighbor + 2-opt) regardless of guidance, hitting a ceiling at ~0.20 improvement that doesn't vary across guidance versions. Large instances (needed to prevent trivial solving) consumed 90% of the time budget, leaving no room for algorithmic diversity. A "solved" problem with well-known optimal heuristics produces worse signal than a less famous problem where the LLM must genuinely explore. QAP, being less prominent in training data and having no single dominant algorithm, produces far better guidance signal.
+- TSP (Travelling Salesman Problem) was ditched as a problem as produced the worst signal. Despite having a vast theoretical optimisation landscape, it has a tiny *effective* landscape: LLMs converge to the same memorised dominant heuristic (nearest-neighbor + 2-opt) regardless of guidance, hitting a ceiling at ~0.20 improvement that doesn't vary. Large instances (needed to prevent trivial solving) consumed 90% of the time budget, leaving no room for algorithmic diversity. A "solved" problem with well-known optimal heuristics produces worse signal than a less famous problem where the LLM must genuinely explore. QAP, being less prominent in training data and having no single dominant algorithm has been far better.
 - Gemini CLI just can't operate in this mode.

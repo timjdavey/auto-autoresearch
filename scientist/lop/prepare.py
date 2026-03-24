@@ -1,13 +1,17 @@
 """
-prepare.py — Fixed evaluation harness for QAP autoresearch.
+prepare.py — Fixed evaluation harness for LOP autoresearch.
 DO NOT MODIFY. The Scientist may only modify train.py.
 
-Provides:
+Provides two evaluation modes:
 
-  evaluate(solve_fn) — training eval over 3 random instances.
+  evaluate(solve_fn) — training eval over random instances.
     Metric: avg_improvement (higher is better).
-    improvement = (baseline_cost - solver_cost) / baseline_cost
+    improvement = (solver_score - baseline_score) / baseline_score
     Baseline is identity permutation, computed once and cached.
+
+  benchmark(solve_fn) — benchmark eval over 5 larger instances.
+    Metric: avg_loss (lower is better).
+    loss = (best_known - solver_score) / best_known
 """
 
 import csv
@@ -15,6 +19,7 @@ import os
 import random
 import time
 from datetime import datetime
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -27,22 +32,18 @@ TIME_BUDGET = 60  # seconds per solve attempt (wall clock)
 # ---------------------------------------------------------------------------
 
 def _generate_random_instance(n: int, seed: int):
-    """Generate a random QAP instance with fixed seed.
+    """Generate a random LOP instance with fixed seed.
 
-    Returns (flow, distance) as symmetric n x n integer matrices with zero diagonal.
+    Returns an n x n matrix with integer entries in [1, 100] and zero diagonal.
+    The matrix is generally non-symmetric.
     """
     rng = random.Random(seed)
-    flow = [[0] * n for _ in range(n)]
-    distance = [[0] * n for _ in range(n)]
+    matrix = [[0] * n for _ in range(n)]
     for i in range(n):
-        for j in range(i + 1, n):
-            f = rng.randint(1, 100)
-            flow[i][j] = f
-            flow[j][i] = f
-            d = rng.randint(1, 100)
-            distance[i][j] = d
-            distance[j][i] = d
-    return flow, distance
+        for j in range(n):
+            if i != j:
+                matrix[i][j] = rng.randint(1, 100)
+    return matrix
 
 
 # ---------------------------------------------------------------------------
@@ -50,61 +51,75 @@ def _generate_random_instance(n: int, seed: int):
 # ---------------------------------------------------------------------------
 
 TRAIN_INSTANCES = {
-    "rand50a": {"flow": (d := _generate_random_instance(50, seed=314159))[0], "distance": d[1], "optimal": None, "known": False},
-    "rand60a": {"flow": (d := _generate_random_instance(60, seed=577215))[0], "distance": d[1], "optimal": None, "known": False},
-    "rand75a": {"flow": (d := _generate_random_instance(75, seed=161803))[0], "distance": d[1], "optimal": None, "known": False},
+    "rand75a":  {"matrix": _generate_random_instance(75,  seed=271828), "optimal": None, "known": False},
+    "rand100a": {"matrix": _generate_random_instance(100, seed=314159), "optimal": None, "known": False},
+    "rand125a": {"matrix": _generate_random_instance(125, seed=577215), "optimal": None, "known": False},
 }
 
 # ---------------------------------------------------------------------------
-# Cost computation
+# Benchmark instances (larger, with best-known scores from extended SA)
 # ---------------------------------------------------------------------------
 
-def assignment_cost(flow, distance, assignment):
-    """Compute QAP objective: sum of flow[i][j] * distance[perm[i]][perm[j]]."""
-    n = len(flow)
-    cost = 0
+BENCHMARK_INSTANCES = {
+    "bench150a": {"matrix": _generate_random_instance(150, seed=800001), "optimal": 611127, "known": True},
+    "bench150b": {"matrix": _generate_random_instance(150, seed=800002), "optimal": 615411, "known": True},
+    "bench175a": {"matrix": _generate_random_instance(175, seed=800003), "optimal": 825573, "known": True},
+    "bench200a": {"matrix": _generate_random_instance(200, seed=800004), "optimal": 1073152, "known": True},
+    "bench200b": {"matrix": _generate_random_instance(200, seed=800005), "optimal": 1077593, "known": True},
+}
+
+INSTANCES = {**TRAIN_INSTANCES, **BENCHMARK_INSTANCES}
+
+# ---------------------------------------------------------------------------
+# Score computation
+# ---------------------------------------------------------------------------
+
+def upper_triangle_sum(matrix, perm):
+    """Compute LOP objective: sum of matrix[perm[i]][perm[j]] for all i < j."""
+    n = len(perm)
+    score = 0
     for i in range(n):
-        pi = assignment[i]
-        for j in range(n):
-            cost += flow[i][j] * distance[pi][assignment[j]]
-    return cost
+        pi = perm[i]
+        for j in range(i + 1, n):
+            score += matrix[pi][perm[j]]
+    return score
 
 
-def validate_assignment(n, assignment):
-    """Return an error string if assignment is invalid, None if valid."""
-    if not isinstance(assignment, list):
-        return "assignment must be a list"
-    if len(assignment) != n:
-        return f"assignment has {len(assignment)} entries, expected {n}"
-    if set(assignment) != set(range(n)):
-        return f"assignment must be a permutation of 0..{n - 1}"
+def validate_permutation(n, perm):
+    """Return an error string if perm is invalid, None if valid."""
+    if not isinstance(perm, list):
+        return "permutation must be a list"
+    if len(perm) != n:
+        return f"permutation has {len(perm)} entries, expected {n}"
+    if set(perm) != set(range(n)):
+        return f"permutation must be a permutation of 0..{n - 1}"
     return None
 
 # ---------------------------------------------------------------------------
 # Identity permutation baseline
 # ---------------------------------------------------------------------------
 
-def _identity_cost(flow, distance):
-    """Cost of the identity permutation (facility i -> location i)."""
-    return assignment_cost(flow, distance, list(range(len(flow))))
+def _identity_score(matrix):
+    """Score of the identity permutation."""
+    return upper_triangle_sum(matrix, list(range(len(matrix))))
 
 
-# Precomputed: cost of identity permutation on each training instance.
+# Precomputed: score of identity permutation on each training instance.
 IDENTITY_BASELINES = {
-    "rand50a": 6191454,
-    "rand60a": 8955822,
-    "rand75a": 14134126,
+    "rand75a":  139044,
+    "rand100a": 249907,
+    "rand125a": 387846,
 }
 
 # ---------------------------------------------------------------------------
 # Evaluation core
 # ---------------------------------------------------------------------------
 
-def _run_solver(solve_fn, flow, distance):
-    """Run solver with time budget. Returns (assignment, elapsed) or (error_str, elapsed)."""
+def _run_solver(solve_fn, matrix):
+    """Run solver with time budget. Returns (perm, elapsed) or (error_str, elapsed)."""
     start = time.time()
     try:
-        assignment = solve_fn(flow, distance)
+        perm = solve_fn(matrix)
         elapsed = time.time() - start
     except Exception as e:
         return str(e), time.time() - start
@@ -112,28 +127,27 @@ def _run_solver(solve_fn, flow, distance):
     if elapsed > TIME_BUDGET * 1.1:  # 10% grace
         return f"exceeded time budget: {elapsed:.1f}s > {TIME_BUDGET}s", elapsed
 
-    n = len(flow)
-    err = validate_assignment(n, assignment)
+    n = len(matrix)
+    err = validate_permutation(n, perm)
     if err:
         return err, elapsed
 
-    return assignment, elapsed
+    return perm, elapsed
 
 
 def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
     """
-    Shared evaluation loop.
+    Shared evaluation loop for both training and benchmark modes.
 
-    metric_fn(cost, inst, name) -> (metric_value, extra_fields_dict)
+    metric_fn(score, inst, name) -> (metric_value, extra_fields_dict)
     """
     results = {}
     total_time = 0.0
     metrics = []
 
     for name, inst in instances.items():
-        flow = inst["flow"]
-        distance = inst["distance"]
-        result, elapsed = _run_solver(solve_fn, flow, distance)
+        matrix = inst["matrix"]
+        result, elapsed = _run_solver(solve_fn, matrix)
         total_time += elapsed
 
         if isinstance(result, str):
@@ -141,11 +155,11 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
             metrics.append(penalty)
             continue
 
-        cost = assignment_cost(flow, distance, result)
-        metric, extra = metric_fn(cost, inst, name)
+        score = upper_triangle_sum(matrix, result)
+        metric, extra = metric_fn(score, inst, name)
         results[name] = {
             "valid": True,
-            "cost": cost,
+            "score": score,
             **{k: round(v, 6) if isinstance(v, float) else v for k, v in extra.items()},
             "time": round(elapsed, 3),
         }
@@ -163,14 +177,29 @@ def evaluate(solve_fn) -> dict:
     Evaluate against training instances (random).
     Metric: avg_improvement over identity baseline (higher is better).
 
-    improvement = (baseline_cost - solver_cost) / baseline_cost
+    improvement = (solver_score - baseline_score) / baseline_score
     """
-    def metric_fn(cost, inst, name):
+    def metric_fn(score, inst, name):
         baseline = IDENTITY_BASELINES[name]
-        improvement = (baseline - cost) / baseline
+        improvement = (score - baseline) / baseline
         return improvement, {"baseline": baseline, "improvement": improvement}
 
     return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
+
+
+def benchmark(solve_fn) -> dict:
+    """
+    Evaluate against benchmark instances (larger, with best-known scores).
+    Metric: avg_loss from best known (lower is better).
+
+    loss = (best_known - solver_score) / best_known
+    """
+    def metric_fn(score, inst, name):
+        best_known = float(inst["optimal"])
+        loss = (best_known - score) / best_known
+        return loss, {"optimal": int(inst["optimal"]), "loss": loss}
+
+    return _evaluate_instances(BENCHMARK_INSTANCES, solve_fn, metric_fn, penalty=10.0, summary_key="avg_loss")
 
 
 # ---------------------------------------------------------------------------
@@ -179,10 +208,11 @@ def evaluate(solve_fn) -> dict:
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 
+# Per-instance columns for each training instance
 _INSTANCE_NAMES = list(TRAIN_INSTANCES.keys())
 RESULT_FIELDS = (
     ["timestamp", "status", "avg_improvement", "training_time"]
-    + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("cost", "improvement", "time")]
+    + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("score", "improvement", "time")]
     + ["notes"]
 )
 
@@ -213,15 +243,15 @@ def log_result(train_results):
     for name in _INSTANCE_NAMES:
         inst = train_results.get(name)
         if isinstance(inst, dict) and inst.get("valid"):
-            row[f"{name}_cost"] = inst.get("cost")
+            row[f"{name}_score"] = inst.get("score")
             row[f"{name}_improvement"] = round(inst["improvement"], 6) if "improvement" in inst else ""
             row[f"{name}_time"] = inst.get("time")
         elif isinstance(inst, dict):
-            row[f"{name}_cost"] = "FAIL"
+            row[f"{name}_score"] = "FAIL"
             row[f"{name}_improvement"] = ""
             row[f"{name}_time"] = round(inst.get("time", 0), 3)
         else:
-            row[f"{name}_cost"] = ""
+            row[f"{name}_score"] = ""
             row[f"{name}_improvement"] = ""
             row[f"{name}_time"] = ""
 
@@ -233,17 +263,17 @@ def log_result(train_results):
 
 
 if __name__ == "__main__":
-    from scientist.qap.train import solve
+    from scientist.lop.train import solve
 
     train_results = evaluate(solve)
 
-    print("\n=== Evaluation ===\n")
+    print("\n=== Evaluation (training instances) ===\n")
     for name, data in train_results.items():
         if not isinstance(data, dict):
             continue
         if data.get("valid"):
             print(
-                f"  {name:12s}  {data['cost']:>12d} / {data['baseline']:>12d}"
+                f"  {name:12s}  {data['score']:>12d} / {data['baseline']:>12d}"
                 f"  {data['improvement']:>+8.2%}  {data['time']:.3f}s"
             )
         else:

@@ -13,9 +13,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from cli import build_cmd
+from human.cli import build_cmd
 from scientist import SCIENTIST_DIR, discover_problems
-from reset import soft_reset
+from human.reset import soft_reset
 from supervisor.evaluate import load_results
 
 DEFAULT_MODEL = "haiku"

@@ -1,55 +1,61 @@
-"""Tests for prepare.py — graph colouring evaluation harness."""
+"""Tests for prepare.py — MAX-SAT evaluation harness."""
 
 import unittest
 
-import scientist.gc.prepare as prepare
-from scientist.gc.prepare import (
+import scientist.maxsat.prepare as prepare
+from scientist.maxsat.prepare import (
     GREEDY_BASELINES,
     TIME_BUDGET,
     TRAIN_INSTANCES,
-    _count_colours,
     _greedy_solve,
     _run_solver,
+    count_unsatisfied,
     evaluate,
-    validate_colouring,
+    validate_assignment,
 )
 
 
 # ---------------------------------------------------------------------------
-# validate_colouring
+# validate_assignment
 # ---------------------------------------------------------------------------
 
-class TestValidateColouring(unittest.TestCase):
+class TestValidateAssignment(unittest.TestCase):
     def test_valid(self):
-        adj = [[1, 2], [0, 2], [0, 1]]  # triangle
-        self.assertIsNone(validate_colouring(adj, 3, [0, 1, 2]))
+        self.assertIsNone(validate_assignment(3, [True, False, True]))
 
     def test_wrong_length(self):
-        adj = [[1], [0]]
-        err = validate_colouring(adj, 2, [0])
-        self.assertIn("1", err)
+        err = validate_assignment(3, [True, False])
         self.assertIn("2", err)
+        self.assertIn("3", err)
 
     def test_not_a_list(self):
-        adj = [[]]
-        err = validate_colouring(adj, 1, (0,))
+        err = validate_assignment(2, (True, False))
         self.assertIn("list", err)
 
-    def test_negative_colour(self):
-        adj = [[1], [0]]
-        err = validate_colouring(adj, 2, [0, -1])
+    def test_non_bool(self):
+        err = validate_assignment(2, [True, 1])
         self.assertIsNotNone(err)
+        self.assertIn("bool", err)
 
-    def test_adjacent_same_colour(self):
-        adj = [[1], [0]]
-        err = validate_colouring(adj, 2, [0, 0])
-        self.assertIsNotNone(err)
-        self.assertIn("adjacent", err)
 
-    def test_non_integer_colour(self):
-        adj = [[]]
-        err = validate_colouring(adj, 1, [1.5])
-        self.assertIsNotNone(err)
+# ---------------------------------------------------------------------------
+# count_unsatisfied
+# ---------------------------------------------------------------------------
+
+class TestCountUnsatisfied(unittest.TestCase):
+    def test_all_satisfied(self):
+        clauses = [[1, 2, 3], [-1, 2, 3]]
+        self.assertEqual(count_unsatisfied(3, clauses, [True, True, True]), 0)
+
+    def test_none_satisfied(self):
+        # clause requires at least one True literal
+        clauses = [[1, 2, 3]]
+        self.assertEqual(count_unsatisfied(3, clauses, [False, False, False]), 1)
+
+    def test_mixed(self):
+        clauses = [[1, 2, 3], [-1, -2, -3]]
+        # all True: first satisfied, second not
+        self.assertEqual(count_unsatisfied(3, clauses, [True, True, True]), 1)
 
 
 # ---------------------------------------------------------------------------
@@ -58,26 +64,24 @@ class TestValidateColouring(unittest.TestCase):
 
 class TestGreedySolve(unittest.TestCase):
     def test_empty(self):
-        self.assertEqual(_greedy_solve([], 0, 0), [])
+        self.assertEqual(_greedy_solve(0, []), [])
 
-    def test_single_node(self):
-        colouring = _greedy_solve([[]], 1, 0)
-        self.assertEqual(colouring, [0])
+    def test_single_var(self):
+        assignment = _greedy_solve(1, [[1]])
+        self.assertIsNone(validate_assignment(1, assignment))
 
-    def test_produces_valid_colouring(self):
-        # Complete graph K4
-        adj = [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]]
-        colouring = _greedy_solve(adj, 4, 6)
-        self.assertIsNone(validate_colouring(adj, 4, colouring))
-        self.assertEqual(_count_colours(colouring), 4)
+    def test_produces_valid_assignment(self):
+        n_vars, clauses = 10, [[1, -2, 3], [-4, 5, -6], [7, 8, -9]]
+        assignment = _greedy_solve(n_vars, clauses)
+        self.assertIsNone(validate_assignment(n_vars, assignment))
 
     def test_baselines_match_cached_values(self):
         """Most important test: verify GREEDY_BASELINES are consistent."""
         for name, inst in TRAIN_INSTANCES.items():
-            colouring = _greedy_solve(inst["adj"], inst["n_nodes"], inst["n_edges"])
-            n_colours = _count_colours(colouring)
+            assignment = _greedy_solve(inst["n_vars"], inst["clauses"])
+            n_unsat = count_unsatisfied(inst["n_vars"], inst["clauses"], assignment)
             self.assertEqual(
-                n_colours, GREEDY_BASELINES[name],
+                n_unsat, GREEDY_BASELINES[name],
                 msg=f"Cached baseline for {name} doesn't match computed value",
             )
 
@@ -88,24 +92,21 @@ class TestGreedySolve(unittest.TestCase):
 
 class TestRunSolver(unittest.TestCase):
     def test_successful_solve(self):
-        adj = [[1, 2], [0, 2], [0, 1]]
-        result, elapsed = _run_solver(lambda a, n, e: list(range(n)), adj, 3, 3)
+        result, elapsed = _run_solver(lambda n, c: [True] * n, 3, [[1, 2, 3]])
         self.assertIsInstance(result, list)
         self.assertGreaterEqual(elapsed, 0)
 
     def test_solver_raises(self):
-        adj = [[1], [0]]
         result, elapsed = _run_solver(
-            lambda a, n, e: (_ for _ in ()).throw(ValueError("boom")),
-            adj, 2, 1,
+            lambda n, c: (_ for _ in ()).throw(ValueError("boom")),
+            3, [[1, 2, 3]],
         )
         self.assertIsInstance(result, str)
         self.assertIn("boom", result)
 
-    def test_invalid_colouring_returned(self):
-        adj = [[1], [0]]
-        result, _ = _run_solver(lambda a, n, e: [0, 0], adj, 2, 1)
-        self.assertIsInstance(result, str)  # error message
+    def test_invalid_assignment_returned(self):
+        result, _ = _run_solver(lambda n, c: [1, 0, 1], 3, [[1, 2, 3]])
+        self.assertIsInstance(result, str)  # error message (not bools)
 
     def test_timeout(self):
         import time as _time
@@ -114,8 +115,8 @@ class TestRunSolver(unittest.TestCase):
         prepare.TIME_BUDGET = 0.01
         try:
             result, _ = _run_solver(
-                lambda a, n, e: (_time.sleep(0.1), [0])[1],
-                [[]], 1, 0,
+                lambda n, c: (_time.sleep(0.1), [True] * n)[1],
+                3, [[1, 2, 3]],
             )
             self.assertIsInstance(result, str)
             self.assertIn("time", result.lower())
@@ -136,7 +137,7 @@ class TestEvaluate(unittest.TestCase):
             self.assertTrue(results[name]["valid"])
 
     def test_crashing_solver(self):
-        def bad_solver(a, n, e):
+        def bad_solver(n, c):
             raise RuntimeError("crash")
 
         results = evaluate(bad_solver)
@@ -161,14 +162,30 @@ class TestInstanceData(unittest.TestCase):
         self.assertEqual(len(TRAIN_INSTANCES), 3)
 
     def test_random_instances_deterministic(self):
-        from scientist.gc.prepare import _generate_random_instance
-        adj, n_nodes, n_edges = _generate_random_instance(300, 0.3, seed=800001)
-        self.assertEqual(adj, TRAIN_INSTANCES["rand300a"]["adj"])
+        from scientist.maxsat.prepare import _generate_random_instance
+        n_vars, clauses = _generate_random_instance(200, 853, seed=421003)
+        self.assertEqual(clauses, TRAIN_INSTANCES["rand200a"]["clauses"])
 
     def test_train_no_optimal(self):
         for name, inst in TRAIN_INSTANCES.items():
             self.assertIsNone(inst["optimal"], f"{name} should have no optimal")
             self.assertFalse(inst["known"], f"{name} should not be known")
+
+    def test_all_clauses_have_3_literals(self):
+        for name, inst in TRAIN_INSTANCES.items():
+            for i, clause in enumerate(inst["clauses"]):
+                self.assertEqual(
+                    len(clause), 3,
+                    msg=f"{name} clause {i} has {len(clause)} literals",
+                )
+
+    def test_variables_in_range(self):
+        for name, inst in TRAIN_INSTANCES.items():
+            n_vars = inst["n_vars"]
+            for clause in inst["clauses"]:
+                for lit in clause:
+                    self.assertGreaterEqual(abs(lit), 1)
+                    self.assertLessEqual(abs(lit), n_vars)
 
 
 if __name__ == "__main__":

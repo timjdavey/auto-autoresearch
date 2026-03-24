@@ -1,13 +1,13 @@
 """
-prepare.py — Fixed evaluation harness for graph colouring autoresearch.
+prepare.py — Fixed evaluation harness for MAX-SAT autoresearch.
 DO NOT MODIFY. The Scientist may only modify train.py.
 
 Provides:
 
-  evaluate(solve_fn) — training eval over 3 random instances.
+  evaluate(solve_fn) — training eval over 3 random 3-SAT instances.
     Metric: avg_improvement (higher is better).
-    improvement = (baseline_colours - solver_colours) / baseline_colours
-    Baseline is greedy colouring with natural ordering, computed once and cached.
+    improvement = (baseline_unsat - solver_unsat) / baseline_unsat
+    Baseline is greedy sequential assignment, computed once and cached.
 """
 
 import csv
@@ -23,93 +23,115 @@ from datetime import datetime
 TIME_BUDGET = 60  # seconds per solve attempt (wall clock)
 
 # ---------------------------------------------------------------------------
-# Random training instances (unknown optimal — no memorisation possible)
+# Random 3-SAT instance generation
 # ---------------------------------------------------------------------------
 
-def _generate_random_instance(n_nodes: int, edge_prob: float, seed: int):
-    """Generate a random G(n, p) graph with fixed seed. Returns (adj, n_nodes, n_edges)."""
-    rng = random.Random(seed)
-    adj = [[] for _ in range(n_nodes)]
-    n_edges = 0
-    for i in range(n_nodes):
-        for j in range(i + 1, n_nodes):
-            if rng.random() < edge_prob:
-                adj[i].append(j)
-                adj[j].append(i)
-                n_edges += 1
-    return adj, n_nodes, n_edges
+def _generate_random_instance(n_vars: int, n_clauses: int, seed: int):
+    """Generate a random 3-SAT instance with fixed seed.
 
+    Returns (n_vars, clauses) where clauses is a list of 3-literal lists.
+    Variables are 1-indexed; negative means negated.
+    """
+    rng = random.Random(seed)
+    clauses = []
+    for _ in range(n_clauses):
+        vars_chosen = rng.sample(range(1, n_vars + 1), 3)
+        clause = [v if rng.random() < 0.5 else -v for v in vars_chosen]
+        clauses.append(clause)
+    return n_vars, clauses
+
+
+# ---------------------------------------------------------------------------
+# Training instances (unknown optimal — no memorisation possible)
+# ---------------------------------------------------------------------------
 
 TRAIN_INSTANCES = {
-    "rand300a": {"adj": (d := _generate_random_instance(300, 0.3, seed=800001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand400a": {"adj": (d := _generate_random_instance(400, 0.3, seed=900001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
-    "rand300e": {"adj": (d := _generate_random_instance(300, 0.5, seed=1000001))[0], "n_nodes": d[1], "n_edges": d[2], "optimal": None, "known": False},
+    "rand200a": {"n_vars": (d := _generate_random_instance(200, 853, seed=421003))[0], "clauses": d[1], "optimal": None, "known": False},
+    "rand250a": {"n_vars": (d := _generate_random_instance(250, 1067, seed=421004))[0], "clauses": d[1], "optimal": None, "known": False},
+    "rand300a": {"n_vars": (d := _generate_random_instance(300, 1280, seed=421005))[0], "clauses": d[1], "optimal": None, "known": False},
 }
 
 # ---------------------------------------------------------------------------
 # Greedy baseline
 # ---------------------------------------------------------------------------
 
-def _greedy_solve(adj, n_nodes, n_edges):
-    """Greedy colouring with natural ordering. Used to compute baseline colour counts."""
-    if n_nodes == 0:
+def _greedy_solve(n_vars, clauses):
+    """Greedy sequential assignment. Used to compute baseline unsatisfied counts."""
+    if n_vars == 0:
         return []
-    colouring = [-1] * n_nodes
-    for node in range(n_nodes):
-        used = set()
-        for neighbour in adj[node]:
-            if colouring[neighbour] != -1:
-                used.add(colouring[neighbour])
-        colour = 0
-        while colour in used:
-            colour += 1
-        colouring[node] = colour
-    return colouring
+    assignment = [False] * n_vars
+    for var_idx in range(n_vars):
+        var = var_idx + 1
+        count_true = 0
+        count_false = 0
+        for clause in clauses:
+            if var not in clause and -var not in clause:
+                continue
+            already_sat = False
+            for lit in clause:
+                v = abs(lit) - 1
+                if v < var_idx:
+                    if (lit > 0 and assignment[v]) or (lit < 0 and not assignment[v]):
+                        already_sat = True
+                        break
+            if already_sat:
+                continue
+            if var in clause:
+                count_true += 1
+            if -var in clause:
+                count_false += 1
+        assignment[var_idx] = count_true >= count_false
+    return assignment
 
 
-def _count_colours(colouring):
-    """Return the number of distinct colours used."""
-    if not colouring:
-        return 0
-    return max(colouring) + 1
+def count_unsatisfied(n_vars, clauses, assignment):
+    """Return the number of clauses not satisfied by the assignment."""
+    n_unsat = 0
+    for clause in clauses:
+        satisfied = False
+        for lit in clause:
+            var_idx = abs(lit) - 1
+            val = assignment[var_idx]
+            if (lit > 0 and val) or (lit < 0 and not val):
+                satisfied = True
+                break
+        if not satisfied:
+            n_unsat += 1
+    return n_unsat
 
 
-# Precomputed: number of colours used by greedy on each training instance.
-# To recompute: run _greedy_solve on each instance and call _count_colours.
+# Precomputed: number of unsatisfied clauses by greedy on each training instance.
+# To recompute: run _greedy_solve on each instance and call count_unsatisfied.
 GREEDY_BASELINES = {
-    "rand300a": 30,
-    "rand400a": 39,
-    "rand300e": 49,
+    "rand200a": 29,
+    "rand250a": 31,
+    "rand300a": 48,
 }
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
-def validate_colouring(adj, n_nodes, colouring):
-    """Return an error string if colouring is invalid, None if valid."""
-    if not isinstance(colouring, list):
-        return "colouring must be a list"
-    if len(colouring) != n_nodes:
-        return f"colouring has {len(colouring)} entries, expected {n_nodes}"
-    for i, c in enumerate(colouring):
-        if not isinstance(c, int) or c < 0:
-            return f"colour at node {i} must be a non-negative integer, got {c!r}"
-    for i in range(n_nodes):
-        for j in adj[i]:
-            if colouring[i] == colouring[j]:
-                return f"adjacent nodes {i} and {j} share colour {colouring[i]}"
+def validate_assignment(n_vars, assignment):
+    """Return an error string if assignment is invalid, None if valid."""
+    if not isinstance(assignment, list):
+        return "assignment must be a list"
+    if len(assignment) != n_vars:
+        return f"assignment has {len(assignment)} entries, expected {n_vars}"
+    for i, v in enumerate(assignment):
+        if not isinstance(v, bool):
+            return f"value at index {i} must be a bool, got {type(v).__name__}"
     return None
 
 # ---------------------------------------------------------------------------
 # Evaluation core
 # ---------------------------------------------------------------------------
 
-def _run_solver(solve_fn, adj, n_nodes, n_edges):
-    """Run solver with time budget. Returns (colouring, elapsed) or (error_str, elapsed)."""
+def _run_solver(solve_fn, n_vars, clauses):
+    """Run solver with time budget. Returns (assignment, elapsed) or (error_str, elapsed)."""
     start = time.time()
     try:
-        colouring = solve_fn(adj, n_nodes, n_edges)
+        assignment = solve_fn(n_vars, clauses)
         elapsed = time.time() - start
     except Exception as e:
         return str(e), time.time() - start
@@ -117,28 +139,27 @@ def _run_solver(solve_fn, adj, n_nodes, n_edges):
     if elapsed > TIME_BUDGET * 1.1:  # 10% grace
         return f"exceeded time budget: {elapsed:.1f}s > {TIME_BUDGET}s", elapsed
 
-    err = validate_colouring(adj, n_nodes, colouring)
+    err = validate_assignment(n_vars, assignment)
     if err:
         return err, elapsed
 
-    return colouring, elapsed
+    return assignment, elapsed
 
 
 def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
     """
     Shared evaluation loop.
 
-    metric_fn(n_colours, inst, name) -> (metric_value, extra_fields_dict)
+    metric_fn(n_unsat, inst, name) -> (metric_value, extra_fields_dict)
     """
     results = {}
     total_time = 0.0
     metrics = []
 
     for name, inst in instances.items():
-        adj = inst["adj"]
-        n_nodes = inst["n_nodes"]
-        n_edges = inst["n_edges"]
-        result, elapsed = _run_solver(solve_fn, adj, n_nodes, n_edges)
+        n_vars = inst["n_vars"]
+        clauses = inst["clauses"]
+        result, elapsed = _run_solver(solve_fn, n_vars, clauses)
         total_time += elapsed
 
         if isinstance(result, str):
@@ -146,11 +167,11 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
             metrics.append(penalty)
             continue
 
-        n_colours = _count_colours(result)
-        metric, extra = metric_fn(n_colours, inst, name)
+        n_unsat = count_unsatisfied(n_vars, clauses, result)
+        metric, extra = metric_fn(n_unsat, inst, name)
         results[name] = {
             "valid": True,
-            "n_colours": n_colours,
+            "n_unsat": n_unsat,
             **{k: round(v, 6) if isinstance(v, float) else v for k, v in extra.items()},
             "time": round(elapsed, 3),
         }
@@ -165,14 +186,14 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
 
 def evaluate(solve_fn) -> dict:
     """
-    Evaluate against training instances (random).
+    Evaluate against training instances (random 3-SAT).
     Metric: avg_improvement over greedy baseline (higher is better).
 
-    improvement = (baseline_colours - n_colours) / baseline_colours
+    improvement = (baseline_unsat - solver_unsat) / baseline_unsat
     """
-    def metric_fn(n_colours, inst, name):
+    def metric_fn(n_unsat, inst, name):
         baseline = GREEDY_BASELINES[name]
-        improvement = (baseline - n_colours) / baseline
+        improvement = (baseline - n_unsat) / baseline if baseline > 0 else 0.0
         return improvement, {"baseline": baseline, "improvement": improvement}
 
     return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
@@ -187,7 +208,7 @@ RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
 _INSTANCE_NAMES = list(TRAIN_INSTANCES.keys())
 RESULT_FIELDS = (
     ["timestamp", "status", "avg_improvement", "training_time"]
-    + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("colours", "improvement", "time")]
+    + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("unsat", "improvement", "time")]
     + ["notes"]
 )
 
@@ -218,15 +239,15 @@ def log_result(train_results):
     for name in _INSTANCE_NAMES:
         inst = train_results.get(name)
         if isinstance(inst, dict) and inst.get("valid"):
-            row[f"{name}_colours"] = inst.get("n_colours")
+            row[f"{name}_unsat"] = inst.get("n_unsat")
             row[f"{name}_improvement"] = round(inst["improvement"], 6) if "improvement" in inst else ""
             row[f"{name}_time"] = inst.get("time")
         elif isinstance(inst, dict):
-            row[f"{name}_colours"] = "FAIL"
+            row[f"{name}_unsat"] = "FAIL"
             row[f"{name}_improvement"] = ""
             row[f"{name}_time"] = round(inst.get("time", 0), 3)
         else:
-            row[f"{name}_colours"] = ""
+            row[f"{name}_unsat"] = ""
             row[f"{name}_improvement"] = ""
             row[f"{name}_time"] = ""
 
@@ -238,7 +259,7 @@ def log_result(train_results):
 
 
 if __name__ == "__main__":
-    from scientist.gc.train import solve
+    from scientist.maxsat.train import solve
 
     train_results = evaluate(solve)
 
@@ -247,8 +268,11 @@ if __name__ == "__main__":
         if not isinstance(data, dict):
             continue
         if data.get("valid"):
+            n_clauses = len(TRAIN_INSTANCES[name]["clauses"])
+            n_sat = n_clauses - data["n_unsat"]
             print(
-                f"  {name:12s}  {data['n_colours']:>3d} / {data['baseline']:>3d} colours"
+                f"  {name:12s}  {n_sat:>5d} / {n_clauses:>5d} satisfied"
+                f"  ({data['n_unsat']} unsat, baseline {data['baseline']})"
                 f"  {data['improvement']:>+8.2%}  {data['time']:.3f}s"
             )
         else:

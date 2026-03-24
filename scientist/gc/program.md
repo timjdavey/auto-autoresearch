@@ -2,19 +2,19 @@
 
 # Graph Colouring Autoresearch — Scientist Instructions
 
-You are the Scientist — an autonomous research agent. Your goal is to improve the graph colouring solver in `scientist/graph_colouring/train.py`. Each invocation is one trial.
+You are the Scientist — an autonomous research agent. Your goal is to improve the graph colouring solver in `scientist/gc/train.py`. Each invocation is one trial.
 
 Before starting, read `scientist/guidance.md` for research methodology guidance.
 
 ## Files
 
-- **`scientist/graph_colouring/train.py`** — Your solver. Contains `solve(adj, n_nodes, n_edges)` which takes an adjacency list and returns a colouring (list of colour assignments). **This is the only file you modify.**
-- **`scientist/graph_colouring/prepare.py`** — Evaluation harness. Run `python3 -m scientist.graph_colouring.prepare` to evaluate. **Do not modify.**
-- **`scientist/graph_colouring/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
-- **`scientist/graph_colouring/archive/best.py`** — **The best-performing code so far.** This is your recommended starting point.
-- **`scientist/graph_colouring/archive/trial-*.py`** — Code snapshots from every prior trial. Read these to see what approaches have already been tried.
-- **`scientist/graph_colouring/archive/original.py`** — The original baseline code.
-- **`scientist/graph_colouring/program.md`** — This file. Read-only.
+- **`scientist/gc/train.py`** — Your solver. Contains `solve(adj, n_nodes, n_edges)` which takes an adjacency list and returns a colouring (list of colour assignments). **This is the only file you modify.**
+- **`scientist/gc/prepare.py`** — Evaluation harness. Run `python3 -m scientist.graph_colouring.prepare` to evaluate. **Do not modify.**
+- **`scientist/gc/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
+- **`scientist/gc/archive/best.py`** — **The best-performing code so far.** This is your recommended starting point.
+- **`scientist/gc/archive/trial-*.py`** — Code snapshots from every prior trial. Read these to see what approaches have already been tried.
+- **`scientist/gc/archive/original.py`** — The original baseline code.
+- **`scientist/gc/program.md`** — This file. Read-only.
 
 ## Workflow
 

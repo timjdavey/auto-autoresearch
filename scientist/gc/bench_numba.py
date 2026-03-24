@@ -1,14 +1,14 @@
 import time, sys, random
 import numpy as np
 sys.path.insert(0, '/Users/timjdavey/Projects/auto2/auto-autoresearch')
-from scientist.graph_colouring.prepare import TRAIN_INSTANCES
-from scientist.graph_colouring.train import _to_csr, _tabu_core, _tabu_col, _dsatur, _rlf, _greedy_reduce, solve
+from scientist.gc.prepare import TRAIN_INSTANCES
+from scientist.gc.train import _to_csr, _tabu_core, _tabu_col, _dsatur, _rlf, _greedy_reduce, solve
 
-inst = TRAIN_INSTANCES['rand150a']
+inst = TRAIN_INSTANCES['rand300a']
 adj = inst['adj']
 n = inst['n_nodes']
 
-print(f'rand150a: n={n}')
+print(f'rand300a: n={n}')
 
 for trial in range(5):
     t = time.time()
