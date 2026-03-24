@@ -11,18 +11,17 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 - **`scientist/tsp/train.py`** — Your solver. Contains `solve(coords)` which takes `(x, y)` tuples and returns a tour (list of city indices). **This is the only file you modify.**
 - **`scientist/tsp/prepare.py`** — Evaluation harness. Run `python3 -m scientist.tsp.prepare` to evaluate. **Do not modify.**
 - **`scientist/tsp/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
-- **`scientist/tsp/archive/best.py`** — Code from the best-scoring prior trial. Use this if the current `train.py` is worse.
-- **`scientist/tsp/archive/summary.md`** — Compact summary of all prior trials and their scores.
+- **`scientist/tsp/archive/best.py`** — **The best-performing code so far.** This is your recommended starting point.
+- **`scientist/tsp/archive/trial-*.py`** — Code snapshots from every prior trial. Read these to see what approaches have already been tried.
 - **`scientist/tsp/archive/original.py`** — The original baseline code.
 - **`scientist/tsp/program.md`** — This file. Read-only.
 
 ## Workflow
 
-1. Read `results.tsv` and `archive/summary.md` to understand prior trial scores.
-2. Read `train.py`. If the last trial regressed, start from `archive/best.py` instead.
+1. Read `archive/best.py` if it exists — this is the best-performing code and your starting point.
+2. Read `train.py`. If it scores below best, start from `archive/best.py`.
 3. Plan ONE targeted improvement. Make the edit.
-4. Run evaluation immediately: `python3 -m scientist.tsp.prepare`
-5. If it crashes or regresses badly, revert and try a different approach. Do not spend time debugging.
+4. Run evaluation: `python3 -m scientist.tsp.prepare`
 
 ## Metric
 

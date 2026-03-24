@@ -38,8 +38,21 @@ SCIENTIST_MAX_BUDGET = 0.25
 SUPERVISOR_PRE_PROMPT = "Read and follow supervisor/method.md — PRE-STUDY phase only."
 SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY phase only."
 
-# Immediate exit on Ctrl-C
-signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+# Track active child process groups so SIGINT can clean them up
+_active_pgids = set()
+
+
+def _sigint_handler(*_):
+    """Kill all active child process groups, then exit."""
+    for pgid in _active_pgids:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except OSError:
+            pass
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _sigint_handler)
 
 
 def run_supervisor(model, allowed_tools, prompt, log_file, timeout, max_budget_usd=None):
@@ -54,6 +67,7 @@ def run_supervisor(model, allowed_tools, prompt, log_file, timeout, max_budget_u
             text=True,
             start_new_session=True,
         )
+        _active_pgids.add(proc.pid)
         try:
             proc.communicate(input=stdin_input, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -65,6 +79,8 @@ def run_supervisor(model, allowed_tools, prompt, log_file, timeout, max_budget_u
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
             return False
+        finally:
+            _active_pgids.discard(proc.pid)
     if proc.returncode != 0:
         print(f"  Supervisor call failed (exit code {proc.returncode})", file=sys.stderr)
         return False

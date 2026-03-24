@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -23,8 +24,23 @@ DEFAULT_TIMEOUT = 600
 DEFAULT_MAX_BUDGET = 0.25
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 
-# Immediate exit on Ctrl-C
-signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+# Track active child process groups so SIGINT can clean them up
+_active_pgids = set()
+_pgid_lock = threading.Lock()
+
+
+def _sigint_handler(*_):
+    """Kill all active child process groups, then exit."""
+    with _pgid_lock:
+        for pgid in _active_pgids:
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except OSError:
+                pass
+    sys.exit(130)
+
+
+signal.signal(signal.SIGINT, _sigint_handler)
 
 
 def _log_timeout(problem_dir, problem_name, trial_timeout):
@@ -51,8 +67,7 @@ def _log_timeout(problem_dir, problem_name, trial_timeout):
 def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
     """Run a single trial for a single problem. Returns (problem, trial_num, status, elapsed)."""
     problem_dir = SCIENTIST_DIR / problem
-    archive_dir = problem_dir / "archive" / timestamp
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir = problem_dir / "archive"
 
     # Archive train.py before Scientist modifies it
     train_path = problem_dir / "train.py"
@@ -72,6 +87,8 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_
             text=True,
             start_new_session=True,
         )
+        with _pgid_lock:
+            _active_pgids.add(proc.pid)
         try:
             proc.communicate(input=stdin_input, timeout=trial_timeout)
         except subprocess.TimeoutExpired:
@@ -84,35 +101,30 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_
                 proc.wait()
             _log_timeout(problem_dir, problem, trial_timeout)
             return problem, trial_num, "TIMEOUT", elapsed
+        finally:
+            with _pgid_lock:
+                _active_pgids.discard(proc.pid)
     elapsed = time.monotonic() - start
     if proc.returncode != 0:
         return problem, trial_num, "FAILED", elapsed
     return problem, trial_num, "done", elapsed
 
 
-def _curate_archive(problem_dir, timestamp):
-    """Maintain archive/best.py and archive/summary.md after each trial."""
+def _curate_archive(problem_dir):
+    """Maintain archive/best.py after each trial."""
     results_path = problem_dir / "results.tsv"
     rows = load_results(results_path)
     if not rows:
         return
 
     archive_dir = problem_dir / "archive"
-    ts_dir = archive_dir / timestamp
 
     # Find the best trial and copy its code to archive/best.py
     best_idx = max(range(len(rows)), key=lambda i: rows[i]["avg_improvement"])
     best_trial_num = best_idx + 1  # trials are 1-indexed
-    best_file = ts_dir / f"trial-{best_trial_num:03d}.py"
+    best_file = archive_dir / f"trial-{best_trial_num:03d}.py"
     if best_file.exists():
         shutil.copy(best_file, archive_dir / "best.py")
-
-    # Write compact summary
-    lines = ["# Trial Summary", "", "| Trial | avg_improvement | status |", "|-------|----------------|--------|"]
-    for i, row in enumerate(rows):
-        marker = " *best*" if i == best_idx else ""
-        lines.append(f"| {i + 1} | {row['avg_improvement']:+.6f}{marker} | ok |")
-    (archive_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
 def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
@@ -148,9 +160,9 @@ def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_ti
             file=sys.stderr,
         )
 
-        # Curate archive: maintain best.py + summary.md
+        # Curate archive: maintain best.py
         try:
-            _curate_archive(SCIENTIST_DIR / problem, timestamp)
+            _curate_archive(SCIENTIST_DIR / problem)
         except Exception:
             pass
 

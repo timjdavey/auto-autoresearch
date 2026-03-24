@@ -86,4 +86,5 @@ uv run experiment
 - Similarly context rot / going off the rails is still a problem for Sonnet (which the Scientist uses), so we've bounded the Supervisor & Scientist to small invocations. This also forces the models to be deliberate about writing their learnings down.
 - Identical replications don't add enough value for their cost at this stage. We're not looking for statistical significance, we're playing at the boundary of simplicity & optimisation.
 - Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal. But at the same time, not _too_ many otherwise you can't see any plateau and difference with the `guidance.md`.
+- More tools (particularly numba) decreased creativity and optionality of paths of Scientists, so removed and kept dependancies small (like original autoresearch).
 - Gemini CLI just can't operate in this mode.
