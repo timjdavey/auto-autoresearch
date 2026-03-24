@@ -4,8 +4,7 @@ train.py — Graph colouring solver. THIS IS THE FILE THE AGENT MODIFIES.
 Contains a single function `solve(adj, n_nodes, n_edges)` that takes an
 adjacency list and returns a colouring as a list of colour assignments.
 
-Current implementation: greedy colouring with natural vertex ordering (baseline).
-The agent should improve this to maximise avg_improvement across all instances.
+Current implementation: DSATUR with restarts and limited color reduction.
 """
 
 import random
@@ -69,44 +68,25 @@ def solve(adj: list[list[int]], n_nodes: int, n_edges: int) -> list[int]:
 
         return colouring
 
-    def welsh_powell():
-        """Greedy coloring with degree-ordered vertices."""
-        colouring = [-1] * n_nodes
-        # Sort nodes by degree (descending)
-        ordered = sorted(range(n_nodes), key=lambda i: len(adj[i]), reverse=True)
-        for node in ordered:
+    def reduce_colors(coloring):
+        """Color reduction: reassign to smallest colors, then try 1-swaps (limited)."""
+        # First: reassign to smallest available color
+        for node in range(n_nodes):
             neighbor_colors = set()
             for neighbour in adj[node]:
-                if colouring[neighbour] != -1:
-                    neighbor_colors.add(colouring[neighbour])
+                if coloring[neighbour] != -1:
+                    neighbor_colors.add(coloring[neighbour])
             colour = 0
             while colour in neighbor_colors:
                 colour += 1
-            colouring[node] = colour
-        return colouring
+            coloring[node] = colour
 
-    def reduce_colors(coloring):
-        """Iterative color reduction with 1-swap moves."""
-        # First: reassign to smallest available color
-        changed = True
-        passes = 0
-        while changed and passes < 3:
-            changed = False
-            passes += 1
-            for node in range(n_nodes):
-                neighbor_colors = set()
-                for neighbour in adj[node]:
-                    neighbor_colors.add(coloring[neighbour])
-                colour = 0
-                while colour in neighbor_colors:
-                    colour += 1
-                if coloring[node] != colour:
-                    coloring[node] = colour
-                    changed = True
-
-        # Second: try 1-swap moves to reduce max color
+        # Second: try 1-swap moves to reduce max color (limit iterations to avoid timeouts)
+        iterations = 0
+        max_iterations = min(100, n_nodes * 2)  # Limit to avoid O(n^3) behavior
         improved = True
-        while improved:
+        while improved and iterations < max_iterations:
+            iterations += 1
             improved = False
             max_color = max(coloring) if coloring else 0
             # Try to eliminate the highest color
@@ -126,28 +106,18 @@ def solve(adj: list[list[int]], n_nodes: int, n_edges: int) -> list[int]:
 
         return coloring
 
-
     best_coloring = None
     best_num_colors = float('inf')
 
-    # Try Welsh-Powell first (fast baseline)
-    coloring = welsh_powell()
-    coloring = reduce_colors(coloring)
-    num_colors = max(coloring) + 1 if coloring else 0
-    if num_colors < best_num_colors:
-        best_num_colors = num_colors
-        best_coloring = coloring
-
-    # Try DSATUR with limited multi-start
+    # Try DSATUR with restarts: high-degree nodes + random points
     sorted_nodes = sorted(range(n_nodes), key=lambda i: len(adj[i]), reverse=True)
-    num_high_degree = min(12, n_nodes)
+    num_high_degree = min(15, n_nodes)  # High-degree starting points
     candidates = sorted_nodes[:num_high_degree]
 
-    # Add some random starting points for diversity
+    # Add random starting points for diversity
     remaining = [i for i in range(n_nodes) if i not in candidates]
     if remaining:
-        random.seed(42)
-        num_random = min(12, len(remaining))
+        num_random = min(12, len(remaining))  # Random starting points for exploration
         random_candidates = random.sample(remaining, num_random)
         candidates = candidates + random_candidates
 

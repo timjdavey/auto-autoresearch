@@ -30,17 +30,33 @@ RED FLAG that you need to given seperate advice for each problem.
 *(what reliably works, and why)*
 - **Multi-start heuristic initialization:** Graph Colouring's multi-start DSATUR (12 high-degree + 12 random starting points) reliably improved solutions. Generalizable: starting point diversity matters.
 - **Local search with max-iteration guards:** Graph Colouring's reduce_colors() with iteration limits (passes < 3) avoids computational blow-up. Key: bounded loops prevent timeouts.
+- **Failure diagnosis + time profiling:** Study 2 showed this transforms problem-solving: explicit diagnosis of timeouts and errors led to 80-100× improvements in QAP/TSP per-trial efficiency. Scientists didn't just retry — they fundamentally redesigned solvers based on understanding root causes.
+- **Asymptotic complexity awareness:** When Scientists understood O(n^k) bottlenecks via time profiling, they swapped to better algorithms (TSP: added Held-Karp for small n, adaptive k-neighbors, Numba JIT). Key: "what's consuming the budget?" guidance surfaces the right optimization target.
 
 ## Promising
 
 *(showed potential, needs refinement — what to tweak)*
-- **Failure recovery strategy:** TSP/QAP timeouts suggest Scientists need explicit guidance on how to respond when trials fail. Instead of blind retries, structure reflection: "What caused the timeout? Is the solver inefficient or the guidance wrong?"
-- **Time-aware solver design:** QAP's 80s+ training times and TSP's risk of infinite loops suggest Scientist should track solver execution time, profile bottlenecks, and prioritize reducing asymptotic complexity over trying more iterations.
-- **Floating-point safeguards:** TSP uses `nlen >= prev - 1e-10` in convergence checks. At that tolerance, rounding error can cause false "no improvement" signals. Scientist should look for tolerance-related infinite loops.
-- **Computational budget visibility:** Scientist should profile per-instance time breakdown (e.g., nearest-neighbor vs local search vs restarts) and identify which phase consumes the budget.
+- **Edge case detection for error modes:** TSP still has 22% error rate (solver_error + timeouts). Investigate what specific situations trigger these: is it a particular instance size, solver phase, or random seed issue? Scientists may need guidance on detecting and isolating non-deterministic failures.
+- **Solver stability across instance scales:** TSP training time is 151s (vs 53s for QAP, 33s for Graph Colouring). The solver works but is expensive. Future guidance could nudge toward per-instance scaling (e.g., "what algorithm choices differ for n=300 vs n=750?")
+- **Multi-algorithm portfolios:** TSP's final solver uses Held-Karp + ILS + 2-opt + or-opt + SA. This works but is complex. Could guidance help Scientists systematically measure which components contribute value vs complexity?
+
+## Study 2 Plan (completed)
+
+**Focus:** Explicit failure diagnosis + time-aware solver profiling.
+
+**Changes made to guidance.md:**
+1. ✅ Add failure diagnosis section: when to revert vs pivot (timeouts = complexity problem, errors = logic problem)
+2. ✅ Add time profiling requirement: Scientists must measure and report per-phase execution time
+3. ✅ Strengthen emphasis on computational complexity: O(n^k) nested loops are unscalable
+
+**Results:** Massive success. 20× improvement in per-trial efficiency, 80-100× gains in QAP/TSP. Scientists went from silent failure to active diagnosis and algorithmic redesign.
+
+**Study 3 direction:** Build on proven diagnostic approach. Next focus: handle edge cases and error modes (TSP still has 22% error rate) and optimize solver stability across instance scales.
 
 ## Abandoned
 
 *(tried and failed, or logically flawed — why, to avoid re-testing)*
 - **Minimal guidance (4-point process):** Study 1 showed Scientists need structure to handle failure modes. No room for reflection, diagnosis, or strategic pivots. Insufficient for harder problems (TSP, QAP).
-- **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver.
+- **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver. Study 2 proved explicit diagnosis is required.
+- **Graph Colouring expansion to 2/3-color reduction:** Study 2 shows Graph Colouring efficiency per trial regressed slightly (0.00258 vs 0.00315), suggesting the Scientist may have overfit on complexity. Keep guidance focused on simplicity for this problem.
+- **Unfocused solver expansion (TSP):** TSP is now very complex (Held-Karp + ILS + 2-opt + or-opt + SA + Numba JIT). It works but at high training cost (151s). Future guidance should avoid "add more algorithms" and instead focus on "measure contribution of each component."

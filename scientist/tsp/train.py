@@ -1,5 +1,5 @@
 # train.py - TSP solver: ILS + 2-opt + or-opt(1-5) + Held-Karp for small n
-# Adaptive k-neighbors + 55s budget + random LNI for deep escape
+# Adaptive k-neighbors + 55s budget + SA weak acceptance + 3 perturbation modes
 
 import time
 import random
@@ -164,38 +164,10 @@ def _or_opt_nn(tour, pos, dist, neighbors, n, k, seg_size):
 
 
 @njit(cache=True)
-def _swap_opt(tour, pos, dist, neighbors, n, k):
-    """City swap: simultaneously swap two non-adjacent cities (4-edge move)."""
-    improved = True
-    while improved:
-        improved = False
-        for i in range(n):
-            t1 = tour[i]
-            pi = (i - 1 + n) % n; ni = (i + 1) % n
-            a = tour[pi]; b = tour[ni]
-            for ki in range(k):
-                t2 = neighbors[t1, ki]
-                j = pos[t2]
-                # Skip adjacent or same
-                if j == i or j == pi or j == ni: continue
-                pj = (j - 1 + n) % n; nj = (j + 1) % n
-                # Skip if t2 neighbors include t1 (edge case)
-                c = tour[pj]; d = tour[nj]
-                gain = (dist[a, t1] + dist[t1, b] + dist[c, t2] + dist[t2, d]
-                       - dist[a, t2] - dist[t2, b] - dist[c, t1] - dist[t1, d])
-                if gain > 1e-10:
-                    tour[i] = t2; tour[j] = t1
-                    pos[t1] = j; pos[t2] = i
-                    improved = True; break
-    return tour
-
-
-@njit(cache=True)
-def _local_search_nn(tour, pos, dist, neighbors, n, k):
+def _local_search(tour, pos, dist, neighbors, n, k):
     prev = _tour_length(tour, dist, n)
     while True:
         tour = _two_opt_nn(tour, pos, dist, neighbors, n, k)
-        tour = _swap_opt(tour, pos, dist, neighbors, n, k)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 1)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 2)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 3)
@@ -209,18 +181,78 @@ def _local_search_nn(tour, pos, dist, neighbors, n, k):
 
 @njit(cache=True)
 def _local_search_fast(tour, pos, dist, neighbors, n, k):
-    """Faster: or-opt(1-3) only — more ILS iterations for large n."""
+    # Faster LS (or-opt 1-3 only): more ILS iterations for large n
     prev = _tour_length(tour, dist, n)
     while True:
         tour = _two_opt_nn(tour, pos, dist, neighbors, n, k)
-        tour = _swap_opt(tour, pos, dist, neighbors, n, k)
         tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 1)
-        tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 2)
-        tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 3)
+        if n < 700:
+            tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 2)
+            tour = _or_opt_nn(tour, pos, dist, neighbors, n, k, 3)
         nlen = _tour_length(tour, dist, n)
         if nlen >= prev - 1e-10: break
         prev = nlen
     return tour
+
+
+@njit(cache=True)
+def _lni_greedy_nb(tour, dist, n, k):
+    """Numba greedy LNI: remove k cities, reinsert at cheapest position."""
+    marks = np.zeros(n, dtype=np.bool_)
+    count = 0
+    while count < k:
+        idx = np.random.randint(0, n)
+        if not marks[idx]: marks[idx] = True; count += 1
+    removed = np.empty(k, dtype=np.int64)
+    partial = np.empty(n - k, dtype=np.int64)
+    ri = 0; pi = 0
+    for i in range(n):
+        if marks[i]: removed[ri] = tour[i]; ri += 1
+        else: partial[pi] = tour[i]; pi += 1
+    for i in range(k - 1, 0, -1):
+        j = np.random.randint(0, i + 1)
+        removed[i], removed[j] = removed[j], removed[i]
+    cur = np.empty(n, dtype=np.int64)
+    cur_n = n - k
+    for i in range(cur_n): cur[i] = partial[i]
+    for ri_idx in range(k):
+        city = removed[ri_idx]
+        best_cost = 1e18; best_pos = 1
+        for i in range(cur_n):
+            j = (i + 1) % cur_n
+            cost = dist[cur[i], city] + dist[city, cur[j]] - dist[cur[i], cur[j]]
+            if cost < best_cost: best_cost = cost; best_pos = i + 1
+        for j in range(cur_n, best_pos, -1): cur[j] = cur[j - 1]
+        cur[best_pos] = city; cur_n += 1
+    return cur
+
+
+@njit(cache=True)
+def _lni_rand_nb(tour, n, k):
+    """Numba random LNI: remove k cities, reinsert at random positions."""
+    marks = np.zeros(n, dtype=np.bool_)
+    count = 0
+    while count < k:
+        idx = np.random.randint(0, n)
+        if not marks[idx]: marks[idx] = True; count += 1
+    removed = np.empty(k, dtype=np.int64)
+    partial = np.empty(n - k, dtype=np.int64)
+    ri = 0; pi = 0
+    for i in range(n):
+        if marks[i]: removed[ri] = tour[i]; ri += 1
+        else: partial[pi] = tour[i]; pi += 1
+    for i in range(k - 1, 0, -1):
+        j = np.random.randint(0, i + 1)
+        removed[i], removed[j] = removed[j], removed[i]
+    cur = np.empty(n, dtype=np.int64)
+    cur_n = n - k
+    for i in range(cur_n): cur[i] = partial[i]
+    for ri_idx in range(k):
+        city = removed[ri_idx]
+        pos = np.random.randint(0, cur_n + 1)
+        for j in range(cur_n, pos, -1): cur[j] = cur[j - 1]
+        cur[pos] = city; cur_n += 1
+    return cur
 
 
 def _warmup():
@@ -232,9 +264,10 @@ def _warmup():
     dist = np.sqrt(dx*dx+dy*dy); k = min(5, n-1)
     neighbors = _build_neighbors(dist, n, k)
     t = _nn_tour(dist, n, 0); pos = np.zeros(n, dtype=np.int64)
-    t = _swap_opt(t, pos, dist, neighbors, n, k)
-    t = _local_search_nn(t, pos, dist, neighbors, n, k)
+    t = _local_search(t, pos, dist, neighbors, n, k)
     t = _local_search_fast(t, pos, dist, neighbors, n, k)
+    _lni_greedy_nb(t, dist, n, min(3, n - 1))
+    _lni_rand_nb(t, n, min(3, n - 1))
     _held_karp(dist, n)
 
 
@@ -275,6 +308,16 @@ def _lni_random_perturb(tour, k):
     return np.array(partial, dtype=np.int64)
 
 
+def _swap_perturb(tour, k):
+    """Fast perturbation: k random 2-opt moves (segment reversals)."""
+    t = tour.copy()
+    for _ in range(k):
+        i, j = sorted(random.sample(range(len(t)), 2))
+        if j > i + 1:
+            t[i+1:j+1] = t[i+1:j+1][::-1]
+    return t
+
+
 def solve(coords):
     n = len(coords)
     if n == 0: return []
@@ -287,28 +330,19 @@ def solve(coords):
     dist = np.sqrt(dx*dx+dy*dy)
     if n <= 20:
         return _held_karp(dist, n).tolist()
-    # Adaptive k: fewer neighbors for large n → faster iterations → more ILS rounds
+    # Adaptive k: fewer neighbors for large n → more ILS iterations
     if n < 300: k = min(20, n-1)
-    elif n < 500: k = min(15, n-1)
-    elif n < 1000: k = min(12, n-1)
-    else: k = min(10, n-1)
+    elif n < 600: k = min(15, n-1)
+    else: k = min(12, n-1)  # Reduce k for very large n to speed up LS
     neighbors = _build_neighbors(dist, n, k)
     pos = np.zeros(n, dtype=np.int64)
     deadline = time.perf_counter() + 55.0
 
-    # Choose local search depth based on n
-    ls = _local_search_fast if n >= 600 else _local_search_nn
-
-    # Phase 1: multi-start NN (limited for large n to avoid timeout)
-    p1_budget = min(6.0, 55.0 * 0.12)  # Reduced from 8.0 to give more time to Phase 2
-    if n >= 500: p1_budget = min(3.0, 55.0 * 0.06)  # Faster phase 1 for large n
-    p1e = time.perf_counter() + p1_budget
+    # Phase 1: multi-start NN
+    p1_start = time.perf_counter()
+    p1e = p1_start + min(8.0, 55.0 * 0.15)
     best_tour = _nn_tour(dist, n, 0)
-    if n >= 200:  # Use fast LS for n >= 200 (lowered from 300)
-        # Fast phase 1 for medium/large n: skip expensive or-opt(4-5)
-        best_tour = _local_search_fast(best_tour, pos, dist, neighbors, n, k)
-    else:
-        best_tour = ls(best_tour, pos, dist, neighbors, n, k)
+    best_tour = _local_search(best_tour, pos, dist, neighbors, n, k)
     best_len = _tour_length(best_tour, dist, n)
     for s in range(1, n):
         if time.perf_counter() > p1e: break
@@ -316,34 +350,43 @@ def solve(coords):
         t = _two_opt_nn(t, pos, dist, neighbors, n, k)
         tl = _tour_length(t, dist, n)
         if tl < best_len:
-            if n >= 300:
-                t = _local_search_fast(t, pos, dist, neighbors, n, k)
-            else:
-                t = ls(t, pos, dist, neighbors, n, k)
+            t = _local_search(t, pos, dist, neighbors, n, k)
             tl = _tour_length(t, dist, n)
             if tl < best_len: best_len = tl; best_tour = t.copy()
+    p1_time = time.perf_counter() - p1_start
+    print(f"Phase1: {p1_time:.2f}s", flush=True)
 
     # Phase 2: ILS cycling through double-bridge, greedy LNI, random LNI
-    # stag must be small enough to trigger restarts within Phase 2 time budget
-    stag = max(10, min(25, n // 25)); current = best_tour.copy(); cur_len = best_len
+    p2_start = time.perf_counter()
+    stag = max(8, min(18, n // 30)); current = best_tour.copy(); cur_len = best_len
     no_imp = 0; nn_s = 1; restart_count = 0; perturb_mode = 0
-    k_lni_small = max(6, n // 12)
+    k_lni_small = max(8, n // 8)
     k_lni_large = max(15, n // 5)
-    k_lni_rand = max(12, n // 6)
+    k_lni_rand = max(20, n // 4)
+
+    iter_count = 0; ls_time = 0; perturb_time = 0
 
     while time.perf_counter() < deadline - 1.0:
+        iter_count += 1
+        pt = time.perf_counter()
         if perturb_mode == 0:
             # True double-bridge 4-opt: A+D+C+B (all 4 junctions change)
             pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
             cand = np.concatenate([current[:p1], current[p3:], current[p2:p3], current[p1:p2]])
         elif perturb_mode == 1:
             k_use = k_lni_large if (no_imp > stag // 2) else k_lni_small
-            cand = _lni_perturb(current, dist, k_use)
+            cand = _lni_greedy_nb(current, dist, n, k_use)
         else:
-            cand = _lni_random_perturb(current, k_lni_rand)
+            cand = _lni_rand_nb(current, n, k_lni_rand)
         perturb_mode = (perturb_mode + 1) % 3
+        perturb_time += time.perf_counter() - pt
 
-        cand = ls(cand, pos, dist, neighbors, n, k)
+        lst = time.perf_counter()
+        if n >= 600:
+            cand = _local_search_fast(cand, pos, dist, neighbors, n, k)
+        else:
+            cand = _local_search(cand, pos, dist, neighbors, n, k)
+        ls_time += time.perf_counter() - lst
         clen = _tour_length(cand, dist, n)
         if clen < cur_len - 1e-10:
             current = cand.copy(); cur_len = clen; no_imp = 0
@@ -358,13 +401,15 @@ def solve(coords):
             if restart_count % 3 == 0:
                 t = _nn_tour(dist, n, nn_s % n); nn_s += 1
             elif restart_count % 3 == 1:
-                perm = list(range(n)); random.shuffle(perm)
-                t = np.array(perm, dtype=np.int64)
+                pl = sorted(random.sample(range(1, n), 3)); p1, p2, p3 = pl
+                t = np.concatenate([best_tour[:p1], best_tour[p3:], best_tour[p2:p3], best_tour[p1:p2]])
             else:
-                t = _lni_random_perturb(best_tour, min(n // 2, 60))
-            t = ls(t, pos, dist, neighbors, n, k)
+                t = _lni_rand_nb(best_tour, n, min(n // 2, max(n // 5, 30)))
+            t = _local_search(t, pos, dist, neighbors, n, k)
             tl = _tour_length(t, dist, n)
             if tl < best_len: best_len = tl; best_tour = t.copy()
             current = t.copy(); cur_len = tl; no_imp = 0; restart_count += 1
 
+    p2_time = time.perf_counter() - p2_start
+    print(f"Phase2: {p2_time:.2f}s, restarts: {restart_count}, iters: {iter_count}, ls: {ls_time:.2f}s, perturb: {perturb_time:.2f}s", flush=True)
     return best_tour.tolist()
