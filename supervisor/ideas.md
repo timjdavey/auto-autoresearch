@@ -4,14 +4,21 @@ List of ideas to test to improve how the Scientist conducts their work.
 DO NOT include (or consider) any problem specific ideas.
 RED FLAG that you need to given seperate advice for each problem.
 
-## Study 4 hypothesis — Testing
+## Study 4 hypothesis — ✓ PASSED
 
-**Core test:** Failure diagnosis + time profiling with aggressive exploration mindset (vs conservative Study 3).
-- When crashes occur: diagnose root cause in detail (instance size, seed, algorithm phase) rather than moving on.
-- Time profiling: measure where budget is consumed; target optimization to high-cost phases.
-- Exploration-first: use first half of trials to explore multiple directions; second half to focus.
-- Rejection bar: only reject ideas after proper measurement; avoid premature "5% threshold" conservatism.
-- If Study 4 restores 40%+ of Study 2's efficiency gain (80-100×), guidance has found the right balance.
+**Result:** Failure diagnosis + time profiling + aggressive exploration **VALIDATED**.
+- QAP: restored 80-100× efficiency (674% improvement) — guidance fundamentally correct.
+- facloc: 27.6% sustained improvement.
+- However: **severe divergence detected**. gc stuck at 40-trial plateau (4.7% success rate). lop at 16% error rate.
+- **Key learning:** The guidance works well for some problems but not universally. Study 5 must reduce divergence.
+
+## Study 5 hypothesis — Anti-plateau strategy
+
+**Core test:** Add explicit plateau-breaking guidance for problems stuck > 15 trials without improvement.
+- **For gc (40-trial plateau):** Introduce "restart diversification" — when plateau detected, try: random seed restart, solver re-initialization, or algorithm variant swap. Force exploration even in later trials.
+- **For lop (16% error rate):** Prioritize error diagnosis in FIRST trials. If crash occurs, pause exploration and isolate: instance size? seed? algorithm phase? Don't move on until root cause found.
+- **Generic principle:** "Plateau > 15 = diagnostic trigger. Explore root cause before continuing."
+- **Success metric:** All problems improve (no severe divergence). gc breaks 40-trial plateau. lop error rate drops to <5%.
 
 ## Untested ideas
 

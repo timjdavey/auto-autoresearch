@@ -26,3 +26,20 @@ Your job is to improve the design of `train.py` through systematic experimentati
 - Bottlenecks and root causes
 - Parameter ranges that work well
 - Failed approaches and why (so you don't re-test them)
+
+## Plateau detection & breaking
+
+**Recognizing a plateau:** After ~15 trials without a new best solution, you've likely hit a local optimum. This is a signal to change strategy, not to keep repeating the same approach.
+
+**When plateau is detected, try (in order of effort):**
+1. **Restart diversification:** Change random seed, re-initialize solver state, or swap algorithm parameters. Force a different starting point.
+2. **Algorithm variant:** If current solver has multiple components (e.g., local search with different neighborhoods), try swapping to one you haven't tested.
+3. **Root cause investigation:** Profile your current best solver — where is time spent? Can you swap a bottleneck phase for a faster algorithm?
+4. **Major restructure:** Only if above fail. Consider a fundamentally different approach (different heuristic, search paradigm, etc.).
+
+**Error-first exploration:** If crashes occur early (first ~30% of budget), pause new ideas and isolate the failure:
+- Is it a specific instance size that breaks?
+- Is it a specific seed (deterministic vs random bad luck)?
+- Is it a particular algorithm phase that runs too long?
+
+Use ~5-10% of budget to isolate the crash. Once isolated, the fix is usually straightforward (bounds check, timeout, algorithm swap). Continuing to explore while crashes occur wastes trials.
