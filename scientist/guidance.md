@@ -27,19 +27,33 @@ Your job is to improve the design of `train.py` through systematic experimentati
 - Parameter ranges that work well
 - Failed approaches and why (so you don't re-test them)
 
-## Plateau detection & breaking
+## Plateau detection & breaking — MANDATORY PROTOCOL
 
-**Recognizing a plateau:** After ~15 trials without a new best solution, you've likely hit a local optimum. This is a signal to change strategy, not to keep repeating the same approach.
+**Recognizing a plateau:** After ~10 trials without a new best solution, you've hit a local optimum. This is a CRITICAL signal. Continuing the same approach wastes trials.
 
-**When plateau is detected, try (in order of effort):**
-1. **Restart diversification:** Change random seed, re-initialize solver state, or swap algorithm parameters. Force a different starting point.
-2. **Algorithm variant:** If current solver has multiple components (e.g., local search with different neighborhoods), try swapping to one you haven't tested.
-3. **Root cause investigation:** Profile your current best solver — where is time spent? Can you swap a bottleneck phase for a faster algorithm?
-4. **Major restructure:** Only if above fail. Consider a fundamentally different approach (different heuristic, search paradigm, etc.).
+**MANDATORY action on plateau detection:**
+When plateau ≥ 10 trials, you MUST take a diversification action in the very next trial. This is non-negotiable. Your choices (in order of effort):
+1. **Restart diversification (easiest):** Change random seed, re-initialize solver state, or swap algorithm parameters. This costs 1 trial, forces a different path.
+2. **Algorithm variant:** If current solver has components (e.g., multiple local search neighborhoods), swap to one you haven't tested. Different heuristic = different starting basin.
+3. **Root cause profiling:** Where is time spent in your current best solver? Can you replace the bottleneck phase with a faster algorithm?
+4. **Major redesign:** Only if 1-3 fail multiple times. Consider fundamentally different approach (different heuristic class, search paradigm).
 
-**Error-first exploration:** If crashes occur early (first ~30% of budget), pause new ideas and isolate the failure:
-- Is it a specific instance size that breaks?
-- Is it a specific seed (deterministic vs random bad luck)?
-- Is it a particular algorithm phase that runs too long?
+Do NOT ignore plateaus and hope for breakthrough — they don't happen by accident. Do NOT repeat the same code change hoping it improves next time — it won't.
 
-Use ~5-10% of budget to isolate the crash. Once isolated, the fix is usually straightforward (bounds check, timeout, algorithm swap). Continuing to explore while crashes occur wastes trials.
+**Error-first exploration — MANDATORY PROTOCOL**
+
+**If any crash occurs in the first ~30% of budget**, you MUST pause new feature exploration and diagnose immediately. This is not optional:
+
+1. **Isolate the failure** (~3-5 trials):
+   - Does it crash on ALL instances or only some? Test small, medium, and large separately.
+   - Is it a specific seed? Re-run the failing instance 2-3 times to confirm deterministic vs random bad luck.
+   - Which algorithm phase? Add timing/debug output to pinpoint: initialization? solver loop? cleanup?
+
+2. **Once isolated, fix or document** (~2-3 trials):
+   - If the crash has a fix (bounds check, timeout, algorithm swap), implement and re-test.
+   - If it's non-deterministic bad luck, document and continue exploration.
+   - If deterministic but unfixable, either redesign that phase or accept the constraint.
+
+3. **Resume exploration** only after crashes are fixed or fully understood. Continuing to develop new features while crashes persist is pure waste.
+
+**Rationale:** Study data shows that unsolved crashes lead to cascading failures — the Scientist develops around a broken solver, wastes trials on features that might help but don't fix the root problem. 16% error rates in early studies came from skipping this step. Investing 5-10% of budget to isolate crashes saves 30-50% on wasted feature exploration.

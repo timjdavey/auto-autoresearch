@@ -4,8 +4,7 @@ train.py — MAX-SAT solver. THIS IS THE FILE THE AGENT MODIFIES.
 Contains a single function `solve(n_vars, clauses)` that takes a CNF formula
 and returns a truth assignment as a list of bools.
 
-Current implementation: GSAT with greedy initialization + random restarts.
-The agent should improve this to maximise avg_improvement across all instances.
+Current implementation: WalkSAT algorithm.
 """
 
 import random
@@ -19,8 +18,7 @@ def count_unsat(assignment: list[bool], clauses: list[list[int]]) -> int:
         satisfied = False
         for lit in clause:
             var_idx = abs(lit) - 1
-            var_val = assignment[var_idx]
-            if (lit > 0 and var_val) or (lit < 0 and not var_val):
+            if (lit > 0 and assignment[var_idx]) or (lit < 0 and not assignment[var_idx]):
                 satisfied = True
                 break
         if not satisfied:
@@ -28,100 +26,54 @@ def count_unsat(assignment: list[bool], clauses: list[list[int]]) -> int:
     return unsat
 
 
-def greedy_init(n_vars: int, clauses: list[list[int]]) -> list[bool]:
-    """Initialize using greedy assignment with randomized variable order."""
-    assignment = [False] * n_vars
-    var_order = list(range(n_vars))
-    random.shuffle(var_order)
+def count_breaks(var_idx: int, assignment: list[bool], clauses: list[list[int]]) -> int:
+    """Count how many currently satisfied clauses would become unsatisfied if we flip var_idx."""
+    breaks = 0
+    for clause in clauses:
+        # Check if clause is currently satisfied
+        satisfied = False
+        for lit in clause:
+            v = abs(lit) - 1
+            if (lit > 0 and assignment[v]) or (lit < 0 and not assignment[v]):
+                satisfied = True
+                break
 
-    for var_idx in var_order:
-        var = var_idx + 1  # 1-indexed
+        if not satisfied:
+            continue
 
-        count_true = 0
-        count_false = 0
-        for clause in clauses:
-            if var not in clause and -var not in clause:
-                continue
-            already_sat = False
+        # Check if flipping var_idx would break this clause
+        var_in_clause = False
+        for lit in clause:
+            if abs(lit) - 1 == var_idx:
+                var_in_clause = True
+                # After flip, the literal becomes false
+                if (lit > 0 and not assignment[var_idx]) or (lit < 0 and assignment[var_idx]):
+                    # This literal is the only one satisfying the clause
+                    break
+
+        if var_in_clause:
+            # Check if any other literal still satisfies
+            still_satisfied = False
             for lit in clause:
                 v = abs(lit) - 1
-                if v < var_idx:
-                    if (lit > 0 and assignment[v]) or (lit < 0 and not assignment[v]):
-                        already_sat = True
-                        break
-            if already_sat:
-                continue
-            if var in clause:
-                count_true += 1
-            if -var in clause:
-                count_false += 1
+                if v == var_idx:
+                    continue
+                if (lit > 0 and assignment[v]) or (lit < 0 and not assignment[v]):
+                    still_satisfied = True
+                    break
+            if not still_satisfied:
+                breaks += 1
 
-        assignment[var_idx] = count_true >= count_false
-
-    return assignment
-
-
-def gsat_local_search(assignment: list[bool], clauses: list[list[int]], time_limit: float) -> list[bool]:
-    """Run GSAT-style local search: first-improvement with variable shuffling."""
-    best_assignment = assignment.copy()
-    best_unsat = count_unsat(best_assignment, clauses)
-    current_assignment = assignment.copy()
-    current_unsat = best_unsat
-
-    start_time = time.time()
-    stuck_count = 0
-    n_vars = len(current_assignment)
-
-    while time.time() - start_time < time_limit:
-        # First-improvement: accept the first flip that improves unsat
-        # Use shuffled variable order to help escape local optima
-        found_improvement = False
-        var_indices = list(range(n_vars))
-        random.shuffle(var_indices)
-
-        for var_idx in var_indices:
-            # Try flipping this variable
-            current_assignment[var_idx] = not current_assignment[var_idx]
-            new_unsat = count_unsat(current_assignment, clauses)
-
-            if new_unsat < current_unsat:
-                # Accept the flip
-                current_unsat = new_unsat
-                found_improvement = True
-
-                if current_unsat < best_unsat:
-                    best_unsat = current_unsat
-                    best_assignment = current_assignment.copy()
-                    stuck_count = 0
-                else:
-                    stuck_count += 1
-                break
-            else:
-                # Flip back if no improvement
-                current_assignment[var_idx] = not current_assignment[var_idx]
-
-        if not found_improvement:
-            stuck_count += 1
-
-        # Early exit if stuck (higher threshold allows more exploration)
-        if stuck_count > 20:
-            break
-
-    return best_assignment
+    return breaks
 
 
 def solve(n_vars: int, clauses: list[list[int]]) -> list[bool]:
     """
-    Solve the Maximum Satisfiability Problem (MAX-SAT).
-
-    Find a truth assignment that satisfies as many clauses as possible in
-    a CNF formula (3-SAT: each clause has exactly 3 literals).
+    Solve the Maximum Satisfiability Problem (MAX-SAT) using WalkSAT.
 
     Args:
         n_vars: number of Boolean variables (variables are 1-indexed in clauses).
         clauses: list of clauses. Each clause is a list of 3 integers.
-                 Positive integer k means variable k is True.
-                 Negative integer -k means variable k is False.
 
     Returns:
         assignment: list of length n_vars where assignment[i] is the truth
@@ -131,34 +83,105 @@ def solve(n_vars: int, clauses: list[list[int]]) -> list[bool]:
         return []
 
     start_time = time.time()
-    time_limit = 59.0  # Leave margin for safety
+    time_limit = 59.0
+    walk_prob = 0.51  # Probability of random walk step
 
-    best_solution = None
+    best_assignment = None
     best_unsat = float('inf')
 
-    # Try greedy initialization + local search
-    greedy_init_assignment = greedy_init(n_vars, clauses)
-    improved = gsat_local_search(greedy_init_assignment, clauses, 5.0)
-    unsat_count = count_unsat(improved, clauses)
-    if unsat_count < best_unsat:
-        best_unsat = unsat_count
-        best_solution = improved
-
-    # Try random restarts
-    num_restarts = max(1, min(8, int((time_limit - (time.time() - start_time) - 1.0) / 3.0)))
-    time_per_restart = (time_limit - (time.time() - start_time) - 1.0) / max(1, num_restarts)
-
-    for _ in range(num_restarts):
-        if time.time() - start_time >= time_limit - 1.0:
+    # WalkSAT with random restarts
+    for restart_iter in range(30):
+        if time.time() - start_time > time_limit:
             break
 
-        # Random initialization
-        random_assignment = [random.choice([True, False]) for _ in range(n_vars)]
-        improved = gsat_local_search(random_assignment, clauses, time_per_restart)
-        unsat_count = count_unsat(improved, clauses)
+        # Initial assignment: greedy on first restart, random on others
+        if restart_iter == 0:
+            # Greedy initialization: pick value that satisfies more unsatisfied clauses
+            assignment = [False] * n_vars
+            for var_idx in range(n_vars):
+                var = var_idx + 1
+                count_true = 0
+                count_false = 0
+                for clause in clauses:
+                    # Check if clause is already satisfied by earlier variables
+                    already_sat = False
+                    for lit in clause:
+                        v = abs(lit) - 1
+                        if v < var_idx:
+                            if (lit > 0 and assignment[v]) or (lit < 0 and not assignment[v]):
+                                already_sat = True
+                                break
+                    if already_sat:
+                        continue
+                    # Count what setting this variable would do
+                    if var in clause:
+                        count_true += 1
+                    if -var in clause:
+                        count_false += 1
+                assignment[var_idx] = count_true >= count_false
+        else:
+            # Random initial assignment for diversification
+            assignment = [random.choice([True, False]) for _ in range(n_vars)]
 
-        if unsat_count < best_unsat:
-            best_unsat = unsat_count
-            best_solution = improved
+        current_unsat = count_unsat(assignment, clauses)
 
-    return best_solution if best_solution is not None else greedy_init_assignment
+        if current_unsat < best_unsat:
+            best_unsat = current_unsat
+            best_assignment = assignment[:]
+
+        if current_unsat == 0:
+            return assignment
+
+        # Local search: WalkSAT
+        no_improve_steps = 0
+        max_no_improve = 400
+
+        while no_improve_steps < max_no_improve and time.time() - start_time < time_limit:
+            # Find an unsatisfied clause
+            unsat_clause = None
+            for clause in clauses:
+                satisfied = False
+                for lit in clause:
+                    var_idx = abs(lit) - 1
+                    if (lit > 0 and assignment[var_idx]) or (lit < 0 and not assignment[var_idx]):
+                        satisfied = True
+                        break
+                if not satisfied:
+                    unsat_clause = clause
+                    break
+
+            if unsat_clause is None:
+                # All clauses satisfied
+                if current_unsat < best_unsat:
+                    best_unsat = 0
+                    best_assignment = assignment[:]
+                return assignment
+
+            # Pick a variable from the unsatisfied clause
+            if random.random() < walk_prob:
+                # Random walk: flip a random variable from the clause
+                var_idx = abs(random.choice(unsat_clause)) - 1
+            else:
+                # Greedy: flip the variable that breaks fewest clauses
+                candidates = [abs(lit) - 1 for lit in unsat_clause]
+                breaks_list = [(var, count_breaks(var, assignment, clauses)) for var in candidates]
+                var_idx = min(breaks_list, key=lambda x: x[1])[0]
+
+            assignment[var_idx] = not assignment[var_idx]
+            new_unsat = count_unsat(assignment, clauses)
+
+            if new_unsat < current_unsat:
+                # Accept improvement
+                current_unsat = new_unsat
+                no_improve_steps = 0
+
+                if current_unsat < best_unsat:
+                    best_unsat = current_unsat
+                    best_assignment = assignment[:]
+
+                if current_unsat == 0:
+                    return assignment
+            else:
+                no_improve_steps += 1
+
+    return best_assignment if best_assignment is not None else [False] * n_vars

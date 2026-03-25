@@ -8,69 +8,8 @@ Current implementation: identity permutation (baseline).
 The agent should improve this to maximise avg_improvement across all instances.
 """
 
-
 import time
 import random
-
-
-def _compute_cost(flow, distance, assignment):
-    """Compute QAP objective: sum of flow[i][j] * distance[assignment[i]][assignment[j]]."""
-    n = len(flow)
-    cost = 0
-    for i in range(n):
-        pi = assignment[i]
-        for j in range(n):
-            cost += flow[i][j] * distance[pi][assignment[j]]
-    return cost
-
-
-def _cost_delta(flow, distance, assignment, i, j):
-    """
-    Compute cost change from swapping assignment[i] and assignment[j].
-    Returns the delta (new_cost - current_cost).
-    """
-    n = len(flow)
-    ai, aj = assignment[i], assignment[j]
-    delta = 0
-
-    # Changes in facility i's cost (now at location aj instead of ai)
-    for k in range(n):
-        ak = assignment[k]
-        delta += flow[i][k] * (distance[aj][ak] - distance[ai][ak])
-        delta += flow[k][i] * (distance[ak][aj] - distance[ak][ai])
-
-    # Changes in facility j's cost (now at location ai instead of aj)
-    for k in range(n):
-        ak = assignment[k]
-        delta += flow[j][k] * (distance[ai][ak] - distance[aj][ak])
-        delta += flow[k][j] * (distance[ak][ai] - distance[ak][aj])
-
-    # Avoid double-counting the direct i-j interaction
-    delta -= 2 * (flow[i][j] * (distance[aj][ai] - distance[ai][aj]))
-    delta -= 2 * (flow[j][i] * (distance[ai][aj] - distance[aj][ai]))
-
-    return delta
-
-
-def _two_opt(flow, distance, assignment, time_limit, start_time):
-    """Perform 2-opt local search until time limit."""
-    n = len(assignment)
-    i = 0
-    while time.time() - start_time < time_limit:
-        j = i + 1
-        found_improvement = False
-        while j < n:
-            delta = _cost_delta(flow, distance, assignment, i, j)
-            if delta < 0:
-                assignment[i], assignment[j] = assignment[j], assignment[i]
-                found_improvement = True
-                i = 0
-                break
-            j += 1
-        if not found_improvement:
-            i += 1
-            if i >= n - 1:
-                break
 
 
 def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
@@ -95,29 +34,89 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
         return [0]
 
     start_time = time.time()
-    time_limit = 55.0
+    time_budget = 50.0  # Leave 10s buffer within 60s limit
 
-    best_assignment = list(range(n))
-    best_cost = _compute_cost(flow, distance, best_assignment)
+    def cost(assignment):
+        """Calculate total QAP cost for given assignment."""
+        total = 0
+        for i in range(n):
+            for j in range(n):
+                total += flow[i][j] * distance[assignment[i]][assignment[j]]
+        return total
 
-    # Multi-start 2-opt
-    num_restarts = max(2, min(10, n // 10))
-    restart_time_each = time_limit / num_restarts
+    def greedy_construct(randomized=False):
+        """Greedy nearest-neighbor construction, optionally with random tie-breaking."""
+        used_locs = set()
+        assignment_nn = [-1] * n
+        assignment_nn[0] = 0
+        used_locs.add(0)
 
-    for restart in range(num_restarts):
-        if time.time() - start_time >= time_limit:
-            break
+        for fac in range(1, n):
+            best_cost = float('inf')
+            candidates = []
 
-        # Random initial solution
-        assignment = list(range(n))
-        random.shuffle(assignment)
+            for loc in range(n):
+                if loc in used_locs:
+                    continue
 
-        # 2-opt from this starting point
-        _two_opt(flow, distance, assignment, restart_time_each, time.time())
+                # Cost to assign facility fac to location loc
+                partial_cost = 0
+                for i in range(fac):
+                    partial_cost += flow[fac][i] * distance[loc][assignment_nn[i]]
+                    partial_cost += flow[i][fac] * distance[assignment_nn[i]][loc]
 
-        cost = _compute_cost(flow, distance, assignment)
-        if cost < best_cost:
-            best_cost = cost
-            best_assignment = assignment[:]
+                if partial_cost < best_cost:
+                    best_cost = partial_cost
+                    candidates = [loc]
+                elif partial_cost == best_cost:
+                    candidates.append(loc)
 
-    return best_assignment
+            # Random tie-breaking for exploration
+            if randomized and len(candidates) > 1:
+                best_loc = random.choice(candidates)
+            else:
+                best_loc = candidates[0]
+
+            assignment_nn[fac] = best_loc
+            used_locs.add(best_loc)
+
+        return assignment_nn
+
+    def local_search_best_improvement(assignment_nn):
+        """2-opt local search using best-improvement strategy."""
+        improved = True
+        iterations = 0
+        max_iterations = min(n * n, 500)
+
+        while improved and iterations < max_iterations:
+            if time.time() - start_time > time_budget:
+                break
+
+            improved = False
+            iterations += 1
+            best_cost = cost(assignment_nn)
+            best_i, best_j = -1, -1
+
+            # Find best swap in the neighborhood
+            for i in range(n):
+                for j in range(i + 1, n):
+                    assignment_nn[i], assignment_nn[j] = assignment_nn[j], assignment_nn[i]
+                    new_cost = cost(assignment_nn)
+                    assignment_nn[i], assignment_nn[j] = assignment_nn[j], assignment_nn[i]
+
+                    if new_cost < best_cost:
+                        best_cost = new_cost
+                        improved = True
+                        best_i, best_j = i, j
+
+            # Apply best swap if improvement found
+            if improved:
+                assignment_nn[best_i], assignment_nn[best_j] = assignment_nn[best_j], assignment_nn[best_i]
+
+        return assignment_nn
+
+    # Greedy construction + local search
+    assignment_nn = greedy_construct(randomized=False)
+    assignment_nn = local_search_best_improvement(assignment_nn)
+
+    return assignment_nn

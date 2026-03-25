@@ -12,12 +12,12 @@ RED FLAG that you need to given seperate advice for each problem.
 - However: **severe divergence detected**. gc stuck at 40-trial plateau (4.7% success rate). lop at 16% error rate.
 - **Key learning:** The guidance works well for some problems but not universally. Study 5 must reduce divergence.
 
-## Study 5 hypothesis — Anti-plateau strategy
+## Study 5 hypothesis — Anti-plateau strategy (ACTIVE)
 
-**Core test:** Add explicit plateau-breaking guidance for problems stuck > 15 trials without improvement.
-- **For gc (40-trial plateau):** Introduce "restart diversification" — when plateau detected, try: random seed restart, solver re-initialization, or algorithm variant swap. Force exploration even in later trials.
-- **For lop (16% error rate):** Prioritize error diagnosis in FIRST trials. If crash occurs, pause exploration and isolate: instance size? seed? algorithm phase? Don't move on until root cause found.
-- **Generic principle:** "Plateau > 15 = diagnostic trigger. Explore root cause before continuing."
+**Core test:** Strengthen plateau-breaking and error-first guidance from "suggested" to "mandatory protocols."
+- **For gc (40-trial plateau):** Current guidance has plateau-detection text but appears not mandatory enough. Strengthen: "If plateau > 10 trials, MUST diversify next trial." Make restarting non-negotiable.
+- **For lop (16% error rate):** Current error-first guidance exists but is insufficiently aggressive. Strengthen: "If ANY crash in first 30% of budget, PAUSE new ideas. Spend next ~5 trials isolating root cause (instance size, seed, phase). Do not resume exploration until crash is fixed or documented as non-deterministic."
+- **Generic principle change:** Reframe from "try diversification" (optional) to "mandatory protocol: plateau > 10 trials = MUST change strategy that trial. Error in early budget = MUST isolate before continuing."
 - **Success metric:** All problems improve (no severe divergence). gc breaks 40-trial plateau. lop error rate drops to <5%.
 
 ## Untested ideas

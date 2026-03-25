@@ -46,14 +46,30 @@ A chronological log of studies — one entry per study, recording what changed, 
 
 ---
 
-### Study 5 — Improve guidance for diverging problems
+### Study 5 — Mandatory protocols for plateaus and errors
 
-**Status:** Planning next study.
+**Status:** ✓ Planning phase complete. Guidance updated 2026-03-25.
 
-**Plan:**
-- Add explicit restart/diversification strategy for problems stuck in long plateaus.
-- Enhance error diagnosis guidance: lop should prioritize crash root-causing in first trials.
-- Generic principle: "If plateau > 15 trials, diversify or change strategy."
-- Monitor divergence: all problems should show improvement, not just some.
+**Diagnosis of Study 4 divergence:**
+- GC hit a 40-trial plateau despite having plateau-breaking guidance. This suggests the guidance was too permissive: "try diversification" was treated as optional.
+- LOP hit 16% error rate. Current error-first guidance exists but is insufficiently aggressive — errors were not prioritized for isolation.
+- **Root cause:** Existing guidance uses suggestive language ("try", "consider"). Scientists need mandatory protocols, not options.
+
+**Changes made to `guidance.md`:**
+1. **Plateau protocol:** Changed threshold from 15 to 10 trials. Made action MANDATORY: "When plateau ≥ 10 trials, you MUST take a diversification action in the very next trial. This is non-negotiable."
+2. **Error protocol:** Made error-first exploration MANDATORY: "If any crash in first ~30% of budget, you MUST pause new features and diagnose immediately. This is not optional."
+3. **Added rationale:** Explained why unsolved crashes cascade (16% error rate study evidence) and why mandatory protocols matter.
+4. **Added specifics:** Concrete isolation steps (test instance sizes, check deterministic vs random, add timing).
+
+**Expected outcome:**
+- GC: forced diversification every 10 trials should break the 40-trial plateau.
+- LOP: error-first protocol should catch crashes before they cascade, reducing error rate from 16% to <5%.
+- facloc/qap: should maintain good performance (guidance not regressive for them).
+
+**Success metrics:**
+- All problems improve or maintain performance.
+- GC's longest plateau drops from 40 to <20 trials.
+- LOP's error rate drops from 16% to <5%.
+- Divergence (spread in per-problem improvements) reduces.
 
 ---

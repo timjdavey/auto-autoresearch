@@ -35,7 +35,7 @@ def solve(matrix: list[list[int]]) -> list[int]:
         return [0]
 
     start_time = time.time()
-    time_limit = 55  # seconds, leaving margin for overhead
+    time_limit = 55.0
 
     def score(perm):
         """Compute LOP objective: sum of matrix[perm[i]][perm[j]] for i < j."""
@@ -46,17 +46,19 @@ def solve(matrix: list[list[int]]) -> list[int]:
                 s += matrix[pi][perm[j]]
         return s
 
-    def greedy_init(seed=None):
-        """Greedy construction: order nodes by descending sum of outgoing weights."""
-        # Compute sum of outgoing weights for each node
+    def greedy_init():
+        """Greedy construction: order nodes by descending (row_sum + col_sum)."""
         row_sums = [sum(matrix[i]) for i in range(n)]
-        # Sort nodes by row sum (descending), with tie-breaking by seed for diversity
-        nodes = sorted(range(n), key=lambda i: (row_sums[i], random.random() if seed else 0), reverse=True)
+        col_sums = [sum(matrix[i][j] for i in range(n)) for j in range(n)]
+        combined_sums = [row_sums[i] + col_sums[i] for i in range(n)]
+        nodes = sorted(range(n), key=lambda i: (combined_sums[i], random.random()), reverse=True)
         return nodes
 
     def local_search(perm):
-        """First-improvement 1-opt local search."""
+        """First-improvement local search: 1-opt then 2-opt."""
         current_score = score(perm)
+
+        # Phase 1: 1-opt (swap two positions)
         improved = True
         while improved and time.time() - start_time < time_limit:
             improved = False
@@ -64,33 +66,51 @@ def solve(matrix: list[list[int]]) -> list[int]:
                 if time.time() - start_time >= time_limit:
                     break
                 for j in range(i + 1, n):
-                    # Try swapping positions i and j
                     perm[i], perm[j] = perm[j], perm[i]
                     new_score = score(perm)
                     if new_score > current_score:
-                        # Accept first improvement and restart
                         current_score = new_score
                         improved = True
                         break
-                    # Revert swap
                     perm[i], perm[j] = perm[j], perm[i]
-                if improved:
+            if improved:
+                break
+
+        # Phase 2: 2-opt (reverse a segment)
+        improved = True
+        while improved and time.time() - start_time < time_limit:
+            improved = False
+            for i in range(n - 2):
+                if time.time() - start_time >= time_limit:
                     break
-        return perm, current_score
+                for j in range(i + 2, n):
+                    # Reverse segment [i+1, j]
+                    perm[i+1:j+1] = perm[i+1:j+1][::-1]
+                    new_score = score(perm)
+                    if new_score > current_score:
+                        current_score = new_score
+                        improved = True
+                        break
+                    perm[i+1:j+1] = perm[i+1:j+1][::-1]
+            if improved:
+                break
 
-    # Multi-start: run from different initializations
+        return score(perm)
+
     best_perm = None
-    best_score = -1
-    num_restarts = max(1, int((time_limit - 5) / (time_limit / 3)))  # Allocate time for 2-3 starts
+    best_score = -float('inf')
 
-    for restart in range(num_restarts):
+    # Multi-start with 5 runs
+    for restart in range(5):
         if time.time() - start_time >= time_limit:
             break
-        random.seed(restart)
-        perm = greedy_init(seed=restart)
-        perm, curr_score = local_search(perm)
-        if curr_score > best_score:
-            best_score = curr_score
-            best_perm = perm
 
-    return best_perm if best_perm else list(range(n))
+        random.seed(restart * 137)  # Deterministic but varied seeds
+        perm = greedy_init()
+        score_val = local_search(perm)
+
+        if score_val > best_score:
+            best_score = score_val
+            best_perm = perm[:]
+
+    return best_perm if best_perm is not None else list(range(n))
