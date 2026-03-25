@@ -19,6 +19,7 @@ import csv
 import math
 import os
 import random
+import signal
 import time
 from datetime import datetime
 from pathlib import Path
@@ -192,12 +193,25 @@ LP_BOUNDS = {
 
 def _run_solver(solve_fn, opening_costs, assign_costs):
     """Run solver with time budget. Returns (assignment, elapsed) or (error_str, elapsed)."""
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("solver exceeded hard time budget")
+
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(TIME_BUDGET + 5)
     start = time.time()
     try:
         assignment = solve_fn(opening_costs, assign_costs)
         elapsed = time.time() - start
+    except TimeoutError:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+        return "exceeded hard time budget", time.time() - start
     except Exception as e:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
         return str(e), time.time() - start
+    signal.alarm(0)
+    signal.signal(signal.SIGALRM, old_handler)
 
     if elapsed > TIME_BUDGET * 1.1:  # 10% grace
         return f"exceeded time budget: {elapsed:.1f}s > {TIME_BUDGET}s", elapsed
