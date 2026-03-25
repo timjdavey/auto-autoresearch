@@ -4,6 +4,15 @@ List of ideas to test to improve how the Scientist conducts their work.
 DO NOT include (or consider) any problem specific ideas.
 RED FLAG that you need to given seperate advice for each problem.
 
+## Study 4 hypothesis — Testing
+
+**Core test:** Failure diagnosis + time profiling with aggressive exploration mindset (vs conservative Study 3).
+- When crashes occur: diagnose root cause in detail (instance size, seed, algorithm phase) rather than moving on.
+- Time profiling: measure where budget is consumed; target optimization to high-cost phases.
+- Exploration-first: use first half of trials to explore multiple directions; second half to focus.
+- Rejection bar: only reject ideas after proper measurement; avoid premature "5% threshold" conservatism.
+- If Study 4 restores 40%+ of Study 2's efficiency gain (80-100×), guidance has found the right balance.
+
 ## Untested ideas
 
 - Memory: each new trial gets a new Scientist, so what files should the Scientist have to maintain pass it's thinking on most efficiently and effectively? e.g. a scratchpad. As searching through old train.py is expensive & slow & doesn't show any insights.
