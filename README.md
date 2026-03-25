@@ -107,3 +107,33 @@ uv run shutdown
 - More tools (particularly numba) decreased creativity and optionality of paths of Scientists, so removed and kept dependancies small (like original autoresearch).
 - TSP (Travelling Salesman Problem) was ditched as a problem as produced the worst signal. Despite having a vast theoretical optimisation landscape, it has a tiny *effective* landscape: LLMs converge to the same memorised dominant heuristic (nearest-neighbor + 2-opt) regardless of guidance, hitting a ceiling at ~0.20 improvement that doesn't vary. Large instances (needed to prevent trivial solving) consumed 90% of the time budget, leaving no room for algorithmic diversity. A "solved" problem with well-known optimal heuristics produces worse signal than a less famous problem where the LLM must genuinely explore. QAP, being less prominent in training data and having no single dominant algorithm has been far better.
 - Gemini CLI just can't operate in this mode.
+
+
+## Evaluation metrics
+
+Each problem's `prepare.py` reports `avg_improvement` — the percentage gain over a weak baseline (greedy or identity permutation). This is the primary signal the Scientist optimises and the Supervisor compares across studies.
+
+### Known limitations
+
+- **Cross-problem scale mismatch.** Baselines vary in weakness (identity permutation for QAP/LOP vs crippled greedy for facloc/gc/maxsat), so raw values are incomparable across problems. A 62% on facloc and 17% on gc don't mean facloc is "more solved." Within a single problem across studies, the baseline is a constant so deltas are meaningful.
+- **No optimality ceiling.** The metric shows distance from baseline, not proximity to optimal. A Scientist stuck at 62% can't tell whether the algorithm is near-optimal or the guidance is bad.
+- **Nonlinear compression near ceiling.** Going from 60%→70% improvement is harder than 10%→20% because the remaining absolute gap shrinks. This compresses progress signals as the Scientist improves.
+
+### Metric suite
+
+Rather than replacing `avg_improvement`, we augment it with complementary signals:
+
+**Per-trial** (in `results.tsv`):
+- `avg_improvement` — quality signal, computed only over successful instances (failures excluded, not penalised)
+- `success_rate` — fraction of instances producing valid results (reliability signal, separate from quality)
+- `best_known.json` — persisted per-instance best-ever-seen, updated on each run when records are broken
+
+**Per-study** (in `evaluate.py`):
+- `improvement_velocity` — `(best - first) / num_trials`, how fast the Scientist learns
+- `plateau_trial` — first trial where running best doesn't improve for 3+ consecutive trials
+- `success_rate` trend — first vs last success rate shows whether Scientist learns to avoid crashes
+
+**Ensemble-level** (for Supervisor, in `_aggregate` rows):
+- `mean_headroom_captured` — `mean((new_best - old_best) / (1 - old_best))` per problem. Normalises cross-problem progress to a common scale: "what fraction of remaining potential did this guidance capture?"
+- `problems_improved` — count of problems where guidance helped (breadth signal)
+- `worst_problem_delta` — guard against guidance that helps some problems but hurts others

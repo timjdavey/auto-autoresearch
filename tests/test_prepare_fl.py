@@ -131,12 +131,12 @@ class TestRunSolver(unittest.TestCase):
         import time as _time
 
         old = prepare.TIME_BUDGET
-        prepare.TIME_BUDGET = 0.01
+        prepare.TIME_BUDGET = 1
         try:
             opening_costs = [100]
             assign_costs = [[10]]
             result, _ = _run_solver(
-                lambda o, a: (_time.sleep(0.1), [0])[1],
+                lambda o, a: (_time.sleep(2), [0])[1],
                 opening_costs, assign_costs,
             )
             self.assertIsInstance(result, str)
@@ -162,7 +162,8 @@ class TestEvaluate(unittest.TestCase):
             raise RuntimeError("crash")
 
         results = evaluate(bad_solver)
-        self.assertAlmostEqual(results["avg_improvement"], -10.0)
+        self.assertAlmostEqual(results["avg_improvement"], 0.0)
+        self.assertAlmostEqual(results["success_rate"], 0.0)
         for name in QUICK_INSTANCES:
             self.assertFalse(results[name]["valid"])
 
@@ -191,7 +192,8 @@ class TestBenchmark(unittest.TestCase):
             raise RuntimeError("crash")
 
         results = benchmark(bad_solver)
-        self.assertAlmostEqual(results["avg_loss"], 10.0)
+        self.assertAlmostEqual(results["avg_loss"], 0.0)
+        self.assertAlmostEqual(results["success_rate"], 0.0)
 
     def test_result_keys(self):
         results = benchmark(_baseline_solve)

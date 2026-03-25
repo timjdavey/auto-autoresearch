@@ -13,11 +13,12 @@ import supervisor.evaluate as evaluate
 from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS, CRASH_THRESHOLD
 
 
-def _row(avg_improvement, training_time=1.0):
+def _row(avg_improvement, training_time=1.0, success_rate=1.0):
     """Helper to build a row dict with sensible defaults."""
     return {
         "timestamp": "2026-01-01T00:00:00",
         "avg_improvement": avg_improvement,
+        "success_rate": success_rate,
         "training_time": training_time,
     }
 

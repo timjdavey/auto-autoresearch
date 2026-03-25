@@ -16,8 +16,8 @@ from pathlib import Path
 
 from scientist import SCIENTIST_DIR, discover_problems
 
-# Crash penalties are -10.0 (set in each problem's prepare.py).
-# Anything at or below this threshold is treated as a crash, not a real result.
+# Legacy: crash penalties were -10.0 (now removed from prepare.py).
+# Anything at or below this threshold is treated as a crash in legacy data.
 CRASH_THRESHOLD = -1
 
 
@@ -42,9 +42,14 @@ def load_results(results_path=None):
                 avg_improvement = float(row["avg_improvement"])
             except (ValueError, TypeError):
                 continue  # skip unparseable rows (e.g. legacy "TIMEOUT after 600s")
+            try:
+                success_rate = float(row.get("success_rate", 1.0))
+            except (ValueError, TypeError):
+                success_rate = 1.0  # legacy rows without success_rate
             rows.append({
                 "timestamp": row["timestamp"],
                 "avg_improvement": avg_improvement,
+                "success_rate": success_rate,
                 "training_time": float(row.get("training_time", 0)),
             })
     return rows
@@ -101,6 +106,25 @@ def analyse(rows):
         if v > CRASH_THRESHOLD and v < running_best * 0.9:
             num_regressions += 1
 
+    # Success rate stats
+    success_rates = [r["success_rate"] for r in rows]
+    avg_success_rate = sum(success_rates) / n
+    first_success_rate = success_rates[0]
+    last_success_rate = success_rates[-1]
+
+    # Plateau detection: first trial where running best doesn't improve for 3+ consecutive
+    plateau_trial = None
+    running_best_for_plateau = improvements[0]
+    stale_count = 0
+    for i, v in enumerate(improvements[1:], start=2):  # 1-indexed trial number
+        if v > CRASH_THRESHOLD and v > running_best_for_plateau:
+            running_best_for_plateau = v
+            stale_count = 0
+        else:
+            stale_count += 1
+            if stale_count >= 3 and plateau_trial is None:
+                plateau_trial = i - 2  # trial where plateau started
+
     # Training time
     training_times = [r["training_time"] for r in rows]
     avg_training_time = sum(training_times) / n
@@ -115,6 +139,9 @@ def analyse(rows):
     # Overall velocity
     overall_velocity = improvement_per_trial
 
+    # Improvement velocity (best - first) / num_trials
+    improvement_velocity = (best_avg_improvement - first) / n if n > 0 else 0.0
+
     return {
         "num_trials": n,
         "first_avg_improvement": first,
@@ -126,11 +153,16 @@ def analyse(rows):
         "best_trial": best_trial,
         "num_errors": num_errors,
         "error_rate": error_rate,
+        "avg_success_rate": avg_success_rate,
+        "first_success_rate": first_success_rate,
+        "last_success_rate": last_success_rate,
         "num_new_bests": num_new_bests,
         "longest_plateau": longest_plateau,
+        "plateau_trial": plateau_trial,
         "num_regressions": num_regressions,
         "total_improvement": total_improvement,
         "improvement_per_trial": improvement_per_trial,
+        "improvement_velocity": improvement_velocity,
         "avg_training_time": avg_training_time,
         "tail_trials": tail_trials,
         "tail_velocity": tail_velocity,
@@ -143,6 +175,7 @@ def print_report(stats, problem=None):
     """Print a human-readable summary."""
     prefix = f"[{problem}] " if problem else ""
     print(f"{prefix}Trials: {stats['num_trials']}  (errors: {stats['num_errors']}, rate: {stats['error_rate']:.0%})")
+    print(f"{prefix}Success rate: avg={stats['avg_success_rate']:.0%}  first={stats['first_success_rate']:.0%}  last={stats['last_success_rate']:.0%}")
     print(f"{prefix}First avg_improvement:  {stats['first_avg_improvement']:.6f}")
     print(f"{prefix}Last  avg_improvement:  {stats['last_avg_improvement']:.6f}")
     print(f"{prefix}Best  avg_improvement:  {stats['best_avg_improvement']:.6f}  (trial {stats['best_trial']})")
@@ -152,10 +185,13 @@ def print_report(stats, problem=None):
     print()
     print(f"{prefix}Total improvement:       {stats['total_improvement']:+.6f}")
     print(f"{prefix}Improvement per trial:   {stats['improvement_per_trial']:+.6f}")
+    print(f"{prefix}Improvement velocity:    {stats['improvement_velocity']:+.6f}  (best - first) / trials")
     print(f"{prefix}Avg training time:       {stats['avg_training_time']:.1f}s")
     print()
+    plateau_str = str(stats['plateau_trial']) if stats['plateau_trial'] is not None else "none"
     print(f"{prefix}Progress: {stats['num_new_bests']} new bests, "
           f"longest plateau: {stats['longest_plateau']}, "
+          f"plateau starts: {plateau_str}, "
           f"regressions: {stats['num_regressions']}")
     print()
     print(f"{prefix}Final 20% ({stats['tail_trials']} trials):")
@@ -175,10 +211,13 @@ STUDY_FIELDS = [
     "best_avg_improvement", "worst_avg_improvement",
     "stdev_avg_improvement", "median_avg_improvement",
     "best_trial", "num_errors", "error_rate",
-    "num_new_bests", "longest_plateau", "num_regressions",
-    "total_improvement", "improvement_per_trial",
+    "avg_success_rate", "first_success_rate", "last_success_rate",
+    "num_new_bests", "longest_plateau", "plateau_trial", "num_regressions",
+    "total_improvement", "improvement_per_trial", "improvement_velocity",
     "avg_training_time",
     "tail_trials", "tail_velocity", "overall_velocity", "tailing_off",
+    # Ensemble-level fields (only populated for _aggregate rows)
+    "mean_headroom_captured", "problems_improved", "worst_problem_delta",
 ]
 
 STUDY_RESULTS_PATH = Path(__file__).parent / "study_results.csv"
@@ -214,8 +253,9 @@ def analyse_and_save(timestamp=None, output_path=None):
         "best_avg_improvement", "worst_avg_improvement",
         "stdev_avg_improvement", "median_avg_improvement",
         "best_trial", "num_errors", "error_rate",
+        "avg_success_rate", "first_success_rate", "last_success_rate",
         "num_new_bests", "longest_plateau", "num_regressions",
-        "total_improvement", "improvement_per_trial",
+        "total_improvement", "improvement_per_trial", "improvement_velocity",
         "avg_training_time",
         "tail_trials", "tail_velocity", "overall_velocity",
     ]
@@ -230,6 +270,31 @@ def analyse_and_save(timestamp=None, output_path=None):
     # Tailing off: True if any problem is tailing off
     tailing_values = [s["tailing_off"] for s in all_stats.values() if s["tailing_off"] is not None]
     aggregate["tailing_off"] = any(tailing_values) if tailing_values else None
+    # Plateau trial: use median across problems (None if no problem plateaued)
+    plateau_values = [s["plateau_trial"] for s in all_stats.values() if s["plateau_trial"] is not None]
+    aggregate["plateau_trial"] = round(statistics.median(plateau_values)) if plateau_values else None
+
+    # Headroom-based ensemble metrics
+    headroom_captured = []
+    problems_improved = 0
+    worst_delta = float("inf")
+    for problem, stats in all_stats.items():
+        old_best = stats["first_avg_improvement"]
+        new_best = stats["best_avg_improvement"]
+        delta = new_best - old_best
+        if delta > 0:
+            problems_improved += 1
+        worst_delta = min(worst_delta, delta)
+        # Headroom: fraction of remaining potential captured
+        headroom = 1.0 - old_best
+        if headroom > 0.001:  # avoid division by near-zero
+            headroom_captured.append(delta / headroom)
+    aggregate["mean_headroom_captured"] = (
+        sum(headroom_captured) / len(headroom_captured) if headroom_captured else 0.0
+    )
+    aggregate["problems_improved"] = problems_improved
+    aggregate["worst_problem_delta"] = worst_delta if worst_delta != float("inf") else 0.0
+
     all_stats["_aggregate"] = aggregate
 
     # Write to CSV
@@ -242,7 +307,7 @@ def analyse_and_save(timestamp=None, output_path=None):
             writer.writerow({
                 "timestamp": timestamp,
                 "problem": problem_name,
-                **{k: stats[k] for k in STUDY_FIELDS[2:]},
+                **{k: stats.get(k, "") for k in STUDY_FIELDS[2:]},
             })
 
     return all_stats

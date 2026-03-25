@@ -11,6 +11,7 @@ Provides:
 """
 
 import csv
+import json
 import os
 import random
 import signal
@@ -160,7 +161,7 @@ def _run_solver(solve_fn, n_vars, clauses):
     return assignment, elapsed
 
 
-def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
+def _evaluate_instances(instances, solve_fn, metric_fn, summary_key):
     """
     Shared evaluation loop.
 
@@ -169,6 +170,8 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
     results = {}
     total_time = 0.0
     metrics = []
+    n_total = len(instances)
+    n_failed = 0
 
     for name, inst in instances.items():
         n_vars = inst["n_vars"]
@@ -178,7 +181,7 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
 
         if isinstance(result, str):
             results[name] = {"valid": False, "error": result, "time": elapsed}
-            metrics.append(penalty)
+            n_failed += 1
             continue
 
         n_unsat = count_unsatisfied(n_vars, clauses, result)
@@ -192,8 +195,9 @@ def _evaluate_instances(instances, solve_fn, metric_fn, penalty, summary_key):
         metrics.append(metric)
 
     results[summary_key] = round(
-        sum(metrics) / len(metrics) if metrics else penalty, 6
+        sum(metrics) / len(metrics) if metrics else 0.0, 6
     )
+    results["success_rate"] = round((n_total - n_failed) / n_total, 6) if n_total > 0 else 0.0
     results["total_time"] = round(total_time, 3)
     return results
 
@@ -210,7 +214,7 @@ def evaluate(solve_fn) -> dict:
         improvement = (baseline - n_unsat) / baseline if baseline > 0 else 0.0
         return improvement, {"baseline": baseline, "improvement": improvement}
 
-    return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, penalty=-10.0, summary_key="avg_improvement")
+    return _evaluate_instances(TRAIN_INSTANCES, solve_fn, metric_fn, summary_key="avg_improvement")
 
 
 # ---------------------------------------------------------------------------
@@ -218,18 +222,51 @@ def evaluate(solve_fn) -> dict:
 # ---------------------------------------------------------------------------
 
 RESULTS_LOG_PATH = os.path.join(os.path.dirname(__file__), "results.tsv")
+BEST_KNOWN_PATH = os.path.join(os.path.dirname(__file__), "best_known.json")
 
 _INSTANCE_NAMES = list(TRAIN_INSTANCES.keys())
 RESULT_FIELDS = (
-    ["timestamp", "status", "avg_improvement", "training_time"]
+    ["timestamp", "status", "avg_improvement", "success_rate", "training_time"]
     + [f"{n}_{s}" for n in _INSTANCE_NAMES for s in ("unsat", "improvement", "time")]
     + ["notes"]
 )
 
 
+def _load_best_known():
+    """Load best-known unsatisfied counts per instance from persistent JSON."""
+    if os.path.exists(BEST_KNOWN_PATH):
+        with open(BEST_KNOWN_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def _update_best_known(instance_results):
+    """Update best-known unsatisfied counts if any instance achieved a new record.
+
+    For minimisation: fewer unsatisfied clauses is better.
+    """
+    best_known = _load_best_known()
+    updated = False
+    for name in _INSTANCE_NAMES:
+        inst = instance_results.get(name)
+        if not isinstance(inst, dict) or not inst.get("valid"):
+            continue
+        n_unsat = inst["n_unsat"]
+        prev_best = best_known.get(name)
+        if prev_best is None or n_unsat < prev_best:
+            best_known[name] = n_unsat
+            updated = True
+    if updated:
+        with open(BEST_KNOWN_PATH, "w") as f:
+            json.dump(best_known, f, indent=2)
+
+
 def log_result(train_results):
     """Append a result record with per-instance detail to results.tsv."""
     write_header = not os.path.exists(RESULTS_LOG_PATH)
+
+    # Update best-known tracking
+    _update_best_known(train_results)
 
     # Determine status and collect error notes
     notes = []
@@ -245,6 +282,7 @@ def log_result(train_results):
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "status": status,
         "avg_improvement": train_results.get("avg_improvement"),
+        "success_rate": train_results.get("success_rate"),
         "training_time": train_results.get("total_time"),
         "notes": "; ".join(notes),
     }
@@ -291,6 +329,6 @@ if __name__ == "__main__":
             )
         else:
             print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
-    print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}  |  total_time: {train_results['total_time']}s")
+    print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}  |  success_rate: {train_results['success_rate']:.0%}  |  total_time: {train_results['total_time']}s")
 
     log_result(train_results)
