@@ -92,6 +92,28 @@ def solve(opening_costs: list[int], assign_costs: list[list[int]]) -> list[int]:
                 assignment[j] = new_fac
                 improved = True
 
+            # Phase 1.5: Try 2-opt swaps if time permits
+            if not improved and (time.time() - start_time) < (time_budget - 0.5):
+                best_delta = 0
+                best_swap = None
+                for j1 in range(n_clients):
+                    for j2 in range(j1 + 1, n_clients):
+                        fac1 = assignment[j1]
+                        fac2 = assignment[j2]
+                        if fac1 == fac2:
+                            continue
+                        old_cost = assign_costs[fac1][j1] + assign_costs[fac2][j2]
+                        new_cost = assign_costs[fac2][j1] + assign_costs[fac1][j2]
+                        delta = new_cost - old_cost
+                        if delta < best_delta:
+                            best_delta = delta
+                            best_swap = (j1, j2, fac1, fac2)
+                if best_swap:
+                    j1, j2, fac1, fac2 = best_swap
+                    assignment[j1] = fac2
+                    assignment[j2] = fac1
+                    improved = True
+
             # Phase 2: Facility closure (if time permits and no client move improved)
             if not improved and (time.time() - start_time) < (time_budget - 1):
                 open_facilities = list(set(assignment))

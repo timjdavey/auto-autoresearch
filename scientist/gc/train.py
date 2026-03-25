@@ -4,102 +4,12 @@ train.py — Graph colouring solver. THIS IS THE FILE THE AGENT MODIFIES.
 Contains a single function `solve(adj, n_nodes, n_edges)` that takes an
 adjacency list and returns a colouring as a list of colour assignments.
 
-Current implementation: DSATUR + 1-opt + Iterated Local Search with perturbations.
+Current implementation: DSATUR with time-budgeted multi-start and adaptive local search.
 The agent should improve this to maximise avg_improvement across all instances.
 """
 
-import time
 import random
-
-
-def _colour_dsatur(adj: list[list[int]], n_nodes: int) -> list[int]:
-    """DSATUR with saturation-primary ordering."""
-    colouring = [-1] * n_nodes
-    uncolored = set(range(n_nodes))
-
-    while uncolored:
-        best_node = None
-        best_sat = -1
-        best_deg = -1
-
-        for node in uncolored:
-            sat = len(set(colouring[nb] for nb in adj[node] if colouring[nb] != -1))
-            deg = len(adj[node])
-
-            if sat > best_sat or (sat == best_sat and deg > best_deg):
-                best_node = node
-                best_sat = sat
-                best_deg = deg
-
-        used = set(colouring[nb] for nb in adj[best_node] if colouring[nb] != -1)
-        colour = 0
-        while colour in used:
-            colour += 1
-        colouring[best_node] = colour
-        uncolored.remove(best_node)
-
-    return colouring
-
-
-def _local_search_1opt(adj: list[list[int]], colouring: list[int], n_nodes: int) -> list[int]:
-    """1-opt local search: move nodes to lower colors."""
-    colouring = colouring[:]  # copy
-    improved = True
-
-    while improved:
-        improved = False
-        max_colour = max(colouring) if colouring else 0
-
-        for target_colour in range(max_colour, -1, -1):
-            nodes_with_colour = [n for n in range(n_nodes) if colouring[n] == target_colour]
-
-            for node in nodes_with_colour:
-                used = set(colouring[nb] for nb in adj[node] if colouring[nb] != -1)
-                for new_colour in range(target_colour):
-                    if new_colour not in used:
-                        colouring[node] = new_colour
-                        improved = True
-                        break
-
-    # Final targeted pass on highest colors
-    while True:
-        max_colour = max(colouring)
-        max_nodes = [n for n in range(n_nodes) if colouring[n] == max_colour]
-        max_nodes.sort(key=lambda n: len(adj[n]))
-
-        found_move = False
-        for node in max_nodes:
-            used = set(colouring[nb] for nb in adj[node] if colouring[nb] != -1)
-            for new_colour in range(max_colour):
-                if new_colour not in used:
-                    colouring[node] = new_colour
-                    found_move = True
-                    break
-            if found_move:
-                break
-
-        if not found_move:
-            break
-
-    return colouring
-
-
-def _perturb(adj: list[list[int]], colouring: list[int], max_colour: int, num_flips: int) -> list[int]:
-    """Perturb solution by re-coloring num_flips nodes greedily while maintaining validity."""
-    perturbed = colouring[:]
-    n = len(colouring)
-
-    nodes_to_recolor = random.sample(range(n), min(num_flips, n))
-    for node in nodes_to_recolor:
-        # Find forbidden colors
-        used = set(perturbed[nb] for nb in adj[node] if perturbed[nb] != -1)
-        # Assign smallest valid color (greedy)
-        colour = 0
-        while colour in used:
-            colour += 1
-        perturbed[node] = colour
-
-    return perturbed
+import time
 
 
 def solve(adj: list[list[int]], n_nodes: int, n_edges: int) -> list[int]:
@@ -121,32 +31,197 @@ def solve(adj: list[list[int]], n_nodes: int, n_edges: int) -> list[int]:
     if n_nodes == 1:
         return [0]
 
+    # --- DSATUR with time-budgeted multi-start and adaptive complexity ---
     start_time = time.time()
-    time_limit = 50.0  # Leave 10s buffer for safety
+    time_budget = 52.0  # Leave 8s margin for safety
 
-    # Initial solution with DSATUR
-    best_colouring = _colour_dsatur(adj, n_nodes)
-    best_colouring = _local_search_1opt(adj, best_colouring, n_nodes)
-    best_colours = max(best_colouring) if best_colouring else 0
+    # Determine complexity level based on graph size and density
+    use_multistart = n_nodes <= 350
+    use_local_search = n_nodes <= 350
 
-    # Iterated local search: perturb and re-optimize
-    iteration = 0
-    while time.time() - start_time < time_limit:
-        iteration += 1
+    # Determine multi-start runs: increase since time budget is ample
+    density = n_edges / (n_nodes * (n_nodes - 1) / 2) if n_nodes > 1 else 0
+    if density > 0.3:  # Dense graphs
+        num_runs = 4 if use_multistart else 1
+        local_search_iters = 40
+    else:  # Sparse/medium graphs
+        num_runs = 5 if use_multistart else 1
+        local_search_iters = 60
 
-        # Perturbation strength scales with iteration
-        num_flips = max(1, n_nodes // (10 + iteration))
+    best_colouring = None
+    best_colours = float('inf')
 
-        # Perturb
-        current = _perturb(adj, best_colouring, best_colours, num_flips)
+    # Multi-start DSATUR with time budgeting
+    for run_idx in range(num_runs):
+        if time.time() - start_time > time_budget:
+            break
 
-        # Re-optimize with 1-opt
-        current = _local_search_1opt(adj, current, n_nodes)
-        current_colours = max(current) if current else 0
+        randomize = (run_idx > 0) and use_multistart
+        colouring = _dsatur_color(adj, n_nodes, randomize_ties=randomize)
 
-        # Accept if better
-        if current_colours < best_colours:
-            best_colouring = current
-            best_colours = current_colours
+        # Apply 1-opt local search if enabled and time permits
+        if use_local_search and time.time() - start_time < time_budget - 3:
+            colouring = _one_opt_improve_limited(adj, colouring, n_nodes, max_iterations=local_search_iters)
+
+        num_colours = max(colouring) + 1 if colouring else 0
+        if num_colours < best_colours:
+            best_colours = num_colours
+            best_colouring = colouring[:]
+
+    # Try greedy with random ordering as additional diversifier
+    if n_nodes > 50 and time.time() - start_time < time_budget - 5:
+        for seed_offset in [42, 123]:  # Multiple random seeds
+            colouring = _greedy_random_color(adj, n_nodes, seed=seed_offset)
+            if use_local_search and time.time() - start_time < time_budget - 3:
+                colouring = _one_opt_improve_limited(adj, colouring, n_nodes, max_iterations=40)
+            num_colours = max(colouring) + 1 if colouring else 0
+            if num_colours < best_colours:
+                best_colours = num_colours
+                best_colouring = colouring[:]
+
+            if time.time() - start_time > time_budget:
+                break
+
+    # Try Welsh-Powell (degree-based) for additional diversity if time permits
+    if n_nodes > 50 and time.time() - start_time < time_budget - 4:
+        colouring = _welsh_powell_color(adj, n_nodes)
+        if use_local_search and time.time() - start_time < time_budget - 2:
+            colouring = _one_opt_improve_limited(adj, colouring, n_nodes, max_iterations=35)
+        num_colours = max(colouring) + 1 if colouring else 0
+        if num_colours < best_colours:
+            best_colours = num_colours
+            best_colouring = colouring[:]
 
     return best_colouring
+
+
+def _greedy_random_color(adj: list[list[int]], n_nodes: int, seed: int = 42) -> list[int]:
+    """Greedy coloring with random node ordering.
+
+    Provides diversity by exploring a different search direction than DSATUR.
+    """
+    random.seed(seed)
+    nodes = list(range(n_nodes))
+    random.shuffle(nodes)
+
+    colouring = [-1] * n_nodes
+    for node in nodes:
+        used = set(colouring[nb] for nb in adj[node] if colouring[nb] != -1)
+        colour = 0
+        while colour in used:
+            colour += 1
+        colouring[node] = colour
+
+    return colouring
+
+
+def _welsh_powell_color(adj: list[list[int]], n_nodes: int) -> list[int]:
+    """Welsh-Powell: greedy coloring with nodes ordered by decreasing degree.
+
+    Provides alternative construction to DSATUR for diversity.
+    """
+    # Sort nodes by degree (descending)
+    nodes_by_degree = sorted(range(n_nodes), key=lambda n: len(adj[n]), reverse=True)
+
+    colouring = [-1] * n_nodes
+    for node in nodes_by_degree:
+        used = set(colouring[nb] for nb in adj[node] if colouring[nb] != -1)
+        colour = 0
+        while colour in used:
+            colour += 1
+        colouring[node] = colour
+
+    return colouring
+
+
+def _dsatur_color(adj: list[list[int]], n_nodes: int, randomize_ties: bool = False) -> list[int]:
+    """DSATUR algorithm: Dynamic Saturation-based selection.
+
+    Args:
+        adj: adjacency list
+        n_nodes: number of nodes
+        randomize_ties: if True, randomly choose among tied nodes for diversity
+    """
+    colouring = [-1] * n_nodes
+    uncoloured = set(range(n_nodes))
+
+    while uncoloured:
+        # Compute saturation degree for each uncoloured node
+        candidates = []  # (saturation, degree, node)
+
+        for node in uncoloured:
+            # Saturation degree = number of distinct colors in neighborhood
+            saturation = len(set(
+                colouring[nb] for nb in adj[node]
+                if colouring[nb] != -1
+            ))
+
+            # Node degree (for tiebreaker)
+            degree = len(adj[node])
+            candidates.append((saturation, degree, node))
+
+        # Find best node(s) by saturation and degree
+        candidates.sort(reverse=True)
+        best_saturation, best_degree, _ = candidates[0]
+
+        # Get all nodes tied for best
+        tied_nodes = [node for sat, deg, node in candidates
+                      if sat == best_saturation and deg == best_degree]
+
+        # Choose best node: deterministic or randomized selection
+        if randomize_ties and len(tied_nodes) > 1:
+            best_node = random.choice(tied_nodes)  # Random choice among tied nodes
+        else:
+            best_node = min(tied_nodes)  # Use min for stable, deterministic tie-breaking
+
+        # Assign smallest available color to best_node
+        used = set(colouring[nb] for nb in adj[best_node] if colouring[nb] != -1)
+        colour = 0
+        while colour in used:
+            colour += 1
+        colouring[best_node] = colour
+        uncoloured.remove(best_node)
+
+    return colouring
+
+
+def _one_opt_improve(adj: list[list[int]], colouring: list[int], n_nodes: int) -> list[int]:
+    """1-opt local search: try to reassign each node to a better color using first-improvement."""
+    return _one_opt_improve_limited(adj, colouring, n_nodes, max_iterations=100)
+
+
+def _one_opt_improve_limited(adj: list[list[int]], colouring: list[int], n_nodes: int, max_iterations: int = 50) -> list[int]:
+    """1-opt local search with configurable iteration limit.
+
+    Tries to improve the coloring by reassigning nodes to lower colors.
+    Uses first-improvement strategy for efficiency.
+    """
+    improved = True
+    iterations = 0
+
+    while improved and iterations < max_iterations:
+        improved = False
+        iterations += 1
+
+        # Iterate through nodes; shuffle after first half to add randomness
+        nodes = list(range(n_nodes))
+        if iterations > max_iterations // 2:
+            random.shuffle(nodes)
+
+        for node in nodes:
+            current_color = colouring[node]
+            if current_color == 0:
+                continue
+
+            used = set(colouring[nb] for nb in adj[node] if colouring[nb] != -1)
+
+            # Try all colors lower than current
+            for colour in range(current_color):
+                if colour not in used:
+                    colouring[node] = colour
+                    improved = True
+                    break
+
+    return colouring
+
+

@@ -7,6 +7,9 @@ and returns a permutation of row/column indices.
 Current implementation: identity permutation (baseline).
 The agent should improve this to maximise avg_improvement across all instances.
 """
+
+
+import time
 import random
 
 
@@ -26,8 +29,6 @@ def solve(matrix: list[list[int]]) -> list[int]:
         perm: list of length n where perm is a permutation of 0..n-1.
               The permutation defines the row/column reordering.
     """
-    import time
-
     n = len(matrix)
     if n == 0:
         return []
@@ -35,123 +36,88 @@ def solve(matrix: list[list[int]]) -> list[int]:
         return [0]
 
     start_time = time.time()
-    time_limit = 54.0  # Stop before hard 60s timeout
+    time_limit = 55.0  # Conservative limit to avoid timeout
 
-    def compute_score(perm):
-        """Compute sum of upper-diagonal elements."""
-        score = 0
-        for i in range(n):
-            for j in range(i + 1, n):
-                score += matrix[perm[i]][perm[j]]
-        return score
-
-    def compute_score_fast(perm, i, j):
-        """Compute score difference for swapping positions i and j."""
-        # Score change from swapping i and j in permutation
-        # Elements that change are those that compare (i,j) or (j,i) with other elements
-        delta = 0
-
-        # Elements between i and j
-        for k in range(i + 1, j):
-            # Before: perm[i] < perm[k] < perm[j]
-            # After: perm[j] < perm[k] < perm[i]
-            before = matrix[perm[i]][perm[k]] + matrix[perm[k]][perm[j]]
-            after = matrix[perm[j]][perm[k]] + matrix[perm[k]][perm[i]]
-            delta += after - before
-
-        # Before position i
-        for k in range(i):
-            before = matrix[perm[k]][perm[i]] + matrix[perm[k]][perm[j]]
-            after = matrix[perm[k]][perm[j]] + matrix[perm[k]][perm[i]]
-            delta += after - before
-
-        # After position j
-        for k in range(j + 1, n):
-            before = matrix[perm[i]][perm[k]] + matrix[perm[j]][perm[k]]
-            after = matrix[perm[j]][perm[k]] + matrix[perm[i]][perm[k]]
-            delta += after - before
-
-        # i and j relationship
-        before = matrix[perm[i]][perm[j]]
-        after = matrix[perm[j]][perm[i]]
-        delta += after - before
-
-        return delta
-
-    def optimize(perm):
-        """Run first-improvement 1-opt local search with random 2-opt escape moves."""
-        score = compute_score(perm)
-        improved = True
-        no_improve_count = 0
-
-        # First-improvement 1-opt local search
-        opt_limit = 50.0
-        while improved and time.time() - start_time < opt_limit:
-            improved = False
-            for i in range(n):
-                for j in range(i + 1, n):
-                    if time.time() - start_time >= opt_limit:
-                        return perm, score
-
-                    delta = compute_score_fast(perm, i, j)
-                    if delta > 0:
-                        perm[i], perm[j] = perm[j], perm[i]
-                        score += delta
-                        improved = True
-                        no_improve_count = 0
-                        break
-
-                if improved:
-                    break
-
-            if not improved:
-                no_improve_count += 1
-                # Try 5 random 2-opt moves to escape plateaus
-                if no_improve_count <= 3 and time.time() - start_time < opt_limit - 1.0:
-                    for _ in range(5):
-                        i = random.randint(0, n - 3)
-                        j = random.randint(i + 2, n - 1)
-                        delta = compute_score_fast(perm, i, j)
-                        if delta > 0:
-                            perm[i], perm[j] = perm[j], perm[i]
-                            score += delta
-                            improved = True
-                            no_improve_count = 0
-                            break
-
-        return perm, score
-
-    best_perm = None
-    best_score = -1
-
-    # Try greedy initialization based on row sums (outgoing weights)
-    row_sums = [sum(matrix[i]) for i in range(n)]
-    perm = sorted(range(n), key=lambda i: row_sums[i], reverse=True)
-    perm, score = optimize(perm[:])
-    if score > best_score:
-        best_score = score
-        best_perm = perm
-
-    # Try greedy initialization based on net weight (row_sum - col_sum)
-    # Elements with high net weight prefer outgoing, should go early
+    # Greedy initialization: order by sum of incoming weights
     col_sums = [sum(matrix[i][j] for i in range(n)) for j in range(n)]
-    net_weights = [row_sums[i] - col_sums[i] for i in range(n)]
-    perm = sorted(range(n), key=lambda i: net_weights[i], reverse=True)
-    perm, score = optimize(perm[:])
-    if score > best_score:
-        best_score = score
-        best_perm = perm
+    perm = sorted(range(n), key=lambda j: col_sums[j], reverse=True)
+    current_score = _upper_triangle_sum(matrix, perm)
 
-    # Random restarts with time budget
-    num_restarts = 3 if n <= 100 else 2
-    for _ in range(num_restarts):
-        if time.time() - start_time >= 51.0:
-            break
-        perm = list(range(n))
-        random.shuffle(perm)
-        perm, score = optimize(perm[:])
-        if score > best_score:
-            best_score = score
-            best_perm = perm
+    # Best-improvement 1-opt local search
+    improved = True
+    while improved and (time.time() - start_time) < time_limit:
+        improved = False
+        best_move_delta = 0
+        best_move_i = -1
+        best_move_j = -1
 
-    return best_perm if best_perm else list(range(n))
+        for i in range(n):
+            if (time.time() - start_time) >= time_limit:
+                break
+
+            node = perm[i]
+
+            # Evaluate all possible moves and pick the best
+            for j in range(n):
+                if j == i:
+                    continue
+
+                delta = _calculate_delta(matrix, perm, i, j)
+                if delta > best_move_delta:
+                    best_move_delta = delta
+                    best_move_i = i
+                    best_move_j = j
+
+        if best_move_delta > 0:
+            # Perform the best move
+            node = perm[best_move_i]
+            perm.pop(best_move_i)
+            perm.insert(best_move_j, node)
+            current_score += best_move_delta
+            improved = True
+
+    return perm
+
+
+def _calculate_delta(matrix, perm, from_pos, to_pos):
+    """
+    Calculate score change for moving node at from_pos to to_pos.
+
+    Returns the delta (new_score - old_score). Positive means improvement.
+    Uses O(n) delta calculation instead of O(n²) full recalculation.
+    """
+    n = len(perm)
+    node = perm[from_pos]
+    delta = 0
+
+    if from_pos < to_pos:
+        # Moving right: nodes between from_pos+1 and to_pos shift left
+        for pos in range(from_pos + 1, to_pos + 1):
+            other = perm[pos]
+            # Node moves right, so:
+            # - loses contribution from being left of 'other' at position from_pos
+            # - gains contribution from being right of 'other' at position to_pos
+            delta -= matrix[node][other]
+            delta += matrix[other][node]
+    else:
+        # Moving left: nodes between to_pos and from_pos-1 shift right
+        for pos in range(to_pos, from_pos):
+            other = perm[pos]
+            # Node moves left, so:
+            # - loses contribution from being right of 'other'
+            # - gains contribution from being left of 'other'
+            delta -= matrix[other][node]
+            delta += matrix[node][other]
+
+    return delta
+
+
+def _upper_triangle_sum(matrix, perm):
+    """Compute LOP objective: sum of matrix[perm[i]][perm[j]] for all i < j."""
+    n = len(perm)
+    score = 0
+    for i in range(n):
+        pi = perm[i]
+        for j in range(i + 1, n):
+            score += matrix[pi][perm[j]]
+    return score
