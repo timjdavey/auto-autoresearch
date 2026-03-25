@@ -7,6 +7,7 @@ and returns a permutation of row/column indices.
 Current implementation: identity permutation (baseline).
 The agent should improve this to maximise avg_improvement across all instances.
 """
+import random
 
 
 def solve(matrix: list[list[int]]) -> list[int]:
@@ -26,7 +27,6 @@ def solve(matrix: list[list[int]]) -> list[int]:
               The permutation defines the row/column reordering.
     """
     import time
-    import random
 
     n = len(matrix)
     if n == 0:
@@ -35,82 +35,123 @@ def solve(matrix: list[list[int]]) -> list[int]:
         return [0]
 
     start_time = time.time()
-    time_limit = 55.0
+    time_limit = 54.0  # Stop before hard 60s timeout
 
-    def score(perm):
-        """Compute LOP objective: sum of matrix[perm[i]][perm[j]] for i < j."""
-        s = 0
+    def compute_score(perm):
+        """Compute sum of upper-diagonal elements."""
+        score = 0
         for i in range(n):
-            pi = perm[i]
             for j in range(i + 1, n):
-                s += matrix[pi][perm[j]]
-        return s
+                score += matrix[perm[i]][perm[j]]
+        return score
 
-    def greedy_init():
-        """Greedy construction: order nodes by descending (row_sum + col_sum)."""
-        row_sums = [sum(matrix[i]) for i in range(n)]
-        col_sums = [sum(matrix[i][j] for i in range(n)) for j in range(n)]
-        combined_sums = [row_sums[i] + col_sums[i] for i in range(n)]
-        nodes = sorted(range(n), key=lambda i: (combined_sums[i], random.random()), reverse=True)
-        return nodes
+    def compute_score_fast(perm, i, j):
+        """Compute score difference for swapping positions i and j."""
+        # Score change from swapping i and j in permutation
+        # Elements that change are those that compare (i,j) or (j,i) with other elements
+        delta = 0
 
-    def local_search(perm):
-        """First-improvement local search: 1-opt then 2-opt."""
-        current_score = score(perm)
+        # Elements between i and j
+        for k in range(i + 1, j):
+            # Before: perm[i] < perm[k] < perm[j]
+            # After: perm[j] < perm[k] < perm[i]
+            before = matrix[perm[i]][perm[k]] + matrix[perm[k]][perm[j]]
+            after = matrix[perm[j]][perm[k]] + matrix[perm[k]][perm[i]]
+            delta += after - before
 
-        # Phase 1: 1-opt (swap two positions)
+        # Before position i
+        for k in range(i):
+            before = matrix[perm[k]][perm[i]] + matrix[perm[k]][perm[j]]
+            after = matrix[perm[k]][perm[j]] + matrix[perm[k]][perm[i]]
+            delta += after - before
+
+        # After position j
+        for k in range(j + 1, n):
+            before = matrix[perm[i]][perm[k]] + matrix[perm[j]][perm[k]]
+            after = matrix[perm[j]][perm[k]] + matrix[perm[i]][perm[k]]
+            delta += after - before
+
+        # i and j relationship
+        before = matrix[perm[i]][perm[j]]
+        after = matrix[perm[j]][perm[i]]
+        delta += after - before
+
+        return delta
+
+    def optimize(perm):
+        """Run first-improvement 1-opt local search with random 2-opt escape moves."""
+        score = compute_score(perm)
         improved = True
-        while improved and time.time() - start_time < time_limit:
+        no_improve_count = 0
+
+        # First-improvement 1-opt local search
+        opt_limit = 50.0
+        while improved and time.time() - start_time < opt_limit:
             improved = False
-            for i in range(n - 1):
-                if time.time() - start_time >= time_limit:
-                    break
+            for i in range(n):
                 for j in range(i + 1, n):
-                    perm[i], perm[j] = perm[j], perm[i]
-                    new_score = score(perm)
-                    if new_score > current_score:
-                        current_score = new_score
-                        improved = True
-                        break
-                    perm[i], perm[j] = perm[j], perm[i]
-            if improved:
-                break
+                    if time.time() - start_time >= opt_limit:
+                        return perm, score
 
-        # Phase 2: 2-opt (reverse a segment)
-        improved = True
-        while improved and time.time() - start_time < time_limit:
-            improved = False
-            for i in range(n - 2):
-                if time.time() - start_time >= time_limit:
+                    delta = compute_score_fast(perm, i, j)
+                    if delta > 0:
+                        perm[i], perm[j] = perm[j], perm[i]
+                        score += delta
+                        improved = True
+                        no_improve_count = 0
+                        break
+
+                if improved:
                     break
-                for j in range(i + 2, n):
-                    # Reverse segment [i+1, j]
-                    perm[i+1:j+1] = perm[i+1:j+1][::-1]
-                    new_score = score(perm)
-                    if new_score > current_score:
-                        current_score = new_score
-                        improved = True
-                        break
-                    perm[i+1:j+1] = perm[i+1:j+1][::-1]
-            if improved:
-                break
 
-        return score(perm)
+            if not improved:
+                no_improve_count += 1
+                # Try 5 random 2-opt moves to escape plateaus
+                if no_improve_count <= 3 and time.time() - start_time < opt_limit - 1.0:
+                    for _ in range(5):
+                        i = random.randint(0, n - 3)
+                        j = random.randint(i + 2, n - 1)
+                        delta = compute_score_fast(perm, i, j)
+                        if delta > 0:
+                            perm[i], perm[j] = perm[j], perm[i]
+                            score += delta
+                            improved = True
+                            no_improve_count = 0
+                            break
+
+        return perm, score
 
     best_perm = None
-    best_score = -float('inf')
+    best_score = -1
 
-    # Multi-start with 5 runs
-    for restart in range(5):
-        if time.time() - start_time >= time_limit:
+    # Try greedy initialization based on row sums (outgoing weights)
+    row_sums = [sum(matrix[i]) for i in range(n)]
+    perm = sorted(range(n), key=lambda i: row_sums[i], reverse=True)
+    perm, score = optimize(perm[:])
+    if score > best_score:
+        best_score = score
+        best_perm = perm
+
+    # Try greedy initialization based on net weight (row_sum - col_sum)
+    # Elements with high net weight prefer outgoing, should go early
+    col_sums = [sum(matrix[i][j] for i in range(n)) for j in range(n)]
+    net_weights = [row_sums[i] - col_sums[i] for i in range(n)]
+    perm = sorted(range(n), key=lambda i: net_weights[i], reverse=True)
+    perm, score = optimize(perm[:])
+    if score > best_score:
+        best_score = score
+        best_perm = perm
+
+    # Random restarts with time budget
+    num_restarts = 3 if n <= 100 else 2
+    for _ in range(num_restarts):
+        if time.time() - start_time >= 51.0:
             break
+        perm = list(range(n))
+        random.shuffle(perm)
+        perm, score = optimize(perm[:])
+        if score > best_score:
+            best_score = score
+            best_perm = perm
 
-        random.seed(restart * 137)  # Deterministic but varied seeds
-        perm = greedy_init()
-        score_val = local_search(perm)
-
-        if score_val > best_score:
-            best_score = score_val
-            best_perm = perm[:]
-
-    return best_perm if best_perm is not None else list(range(n))
+    return best_perm if best_perm else list(range(n))

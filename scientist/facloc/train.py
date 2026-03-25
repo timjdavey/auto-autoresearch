@@ -5,11 +5,12 @@ Contains a single function `solve(opening_costs, assign_costs)` that takes
 facility opening costs and an assignment cost matrix, and returns an assignment
 of clients to facilities.
 
-Current implementation: greedy nearest with local search (client reassignment).
+Current implementation: greedy nearest with local search (client reassignment + facility closure).
 The agent should improve this to maximise avg_improvement across all instances.
 """
 
 import time
+import random
 
 
 def solve(opening_costs: list[int], assign_costs: list[list[int]]) -> list[int]:
@@ -39,12 +40,6 @@ def solve(opening_costs: list[int], assign_costs: list[list[int]]) -> list[int]:
     if n_facilities == 1:
         return [0] * n_clients
 
-    # --- Greedy nearest: initial assignment ---
-    assignment = []
-    for j in range(n_clients):
-        best_fac = min(range(n_facilities), key=lambda i: assign_costs[i][j])
-        assignment.append(best_fac)
-
     # --- Compute total cost helper ---
     def total_cost(asgn):
         opened = set(asgn)
@@ -52,21 +47,17 @@ def solve(opening_costs: list[int], assign_costs: list[list[int]]) -> list[int]:
         cost += sum(assign_costs[asgn[j]][j] for j in range(n_clients))
         return cost
 
-    # --- Alternating local search and facility closure ---
-    global_start = time.time()
-    time_limit = 50
-
-    while (time.time() - global_start) < time_limit:
-        # Local search phase (2 seconds max per iteration)
-        search_start = time.time()
-        search_limit = 2.0
-        current_cost = total_cost(assignment)
-
-        while (time.time() - search_start) < search_limit:
+    def local_search(assignment, time_budget, start_time):
+        """Apply local search to assignment."""
+        max_iterations = 100
+        iteration = 0
+        while (time.time() - start_time) < time_budget and iteration < max_iterations:
+            iteration += 1
+            improved = False
             best_delta = 0
             best_move = None
 
-            # Find the best single client move
+            # Phase 1: Find best individual client reassignment move
             for j in range(n_clients):
                 old_fac = assignment[j]
                 old_assignment_cost = assign_costs[old_fac][j]
@@ -76,63 +67,105 @@ def solve(opening_costs: list[int], assign_costs: list[list[int]]) -> list[int]:
                         continue
 
                     new_assignment_cost = assign_costs[new_fac][j]
-                    delta = new_assignment_cost - old_assignment_cost
 
-                    # Check if facility new_fac is currently open
-                    fac_opening_delta = 0
-                    if new_fac not in assignment:
-                        # Would need to open new facility
-                        fac_opening_delta = opening_costs[new_fac]
+                    # Calculate facility opening/closing costs (before moving)
+                    assignment_delta = new_assignment_cost - old_assignment_cost
+                    facility_delta = 0
 
-                    # Check if closing old facility saves money
-                    if assignment.count(old_fac) == 1:
-                        # This is the last client on old_fac
-                        fac_opening_delta -= opening_costs[old_fac]
+                    # Would we open new_fac? (check if any OTHER client uses it)
+                    if sum(1 for k in range(n_clients) if assignment[k] == new_fac) == 0:
+                        facility_delta += opening_costs[new_fac]
 
-                    total_delta = delta + fac_opening_delta
+                    # Would we close old_fac? (check if this is the only client on it)
+                    if sum(1 for k in range(n_clients) if assignment[k] == old_fac) == 1:
+                        facility_delta -= opening_costs[old_fac]
+
+                    total_delta = assignment_delta + facility_delta
 
                     if total_delta < best_delta:
                         best_delta = total_delta
-                        best_move = (j, old_fac, new_fac)
+                        best_move = (j, new_fac)
 
-            if best_move is None:
+            # Apply best move if found
+            if best_move:
+                j, new_fac = best_move
+                assignment[j] = new_fac
+                improved = True
+
+            # Phase 2: Facility closure (if time permits and no client move improved)
+            if not improved and (time.time() - start_time) < (time_budget - 1):
+                open_facilities = list(set(assignment))
+                for fac_to_close in open_facilities:
+                    clients_on_fac = [j for j in range(n_clients) if assignment[j] == fac_to_close]
+                    if not clients_on_fac:
+                        continue
+
+                    # Compute cost of reassigning all clients from this facility
+                    total_reassign_cost_delta = 0
+                    reassignments = []
+
+                    for j in clients_on_fac:
+                        # Find best alternative facility
+                        best_alt_fac = min((f for f in range(n_facilities) if f != fac_to_close),
+                                           key=lambda f: assign_costs[f][j])
+                        cost_delta = assign_costs[best_alt_fac][j] - assign_costs[fac_to_close][j]
+                        total_reassign_cost_delta += cost_delta
+                        reassignments.append((j, best_alt_fac))
+
+                    # Close if it saves money
+                    if total_reassign_cost_delta < opening_costs[fac_to_close]:
+                        for j, new_fac in reassignments:
+                            assignment[j] = new_fac
+                        improved = True
+                        break
+
+            if not improved:
                 break
+        return assignment
 
-            j, old_fac, new_fac = best_move
-            assignment[j] = new_fac
-            current_cost += best_delta
+    global_start = time.time()
+    time_limit = 45
 
-        # Facility closure phase
-        if (time.time() - global_start) < (time_limit - 0.5):
-            open_facilities = list(set(assignment))
-            for fac_to_close in open_facilities:
-                clients_on_fac = [j for j in range(n_clients) if assignment[j] == fac_to_close]
-                n_clients_on_fac = len(clients_on_fac)
+    # Try multiple initializations and keep the best
+    best_assignment = None
+    best_cost = float('inf')
 
-                # Compute cost of reassigning all clients from this facility
-                total_reassign_cost_delta = 0
-                reassignments = []
+    # Init 1: Greedy nearest (usually best, get more time)
+    assignment = []
+    for j in range(n_clients):
+        best_fac = min(range(n_facilities), key=lambda i: assign_costs[i][j])
+        assignment.append(best_fac)
+    assignment = local_search(assignment, 18, global_start)
+    cost = total_cost(assignment)
+    if cost < best_cost:
+        best_cost = cost
+        best_assignment = assignment[:]
 
-                for j in clients_on_fac:
-                    # Find best alternative facility for this client
-                    best_alt_fac = min((f for f in range(n_facilities) if f != fac_to_close),
-                                       key=lambda f: assign_costs[f][j])
-                    cost_delta = assign_costs[best_alt_fac][j] - assign_costs[fac_to_close][j]
-                    total_reassign_cost_delta += cost_delta
-                    reassignments.append((j, best_alt_fac))
+    # Init 2: Cost-aware (minimize assignment + opening spread)
+    if (time.time() - global_start) < 33:
+        avg_opening = sum(opening_costs) / n_facilities
+        assignment = []
+        for j in range(n_clients):
+            best_fac = min(range(n_facilities),
+                          key=lambda i: assign_costs[i][j] + avg_opening / n_clients)
+            assignment.append(best_fac)
+        assignment = local_search(assignment, 13, global_start)
+        cost = total_cost(assignment)
+        if cost < best_cost:
+            best_cost = cost
+            best_assignment = assignment[:]
 
-                # Close if:
-                # 1. Saves money overall, OR
-                # 2. Facility has very few clients and high opening cost relative to reassignment
-                savings = opening_costs[fac_to_close]
-                avg_client_cost = total_reassign_cost_delta / n_clients_on_fac if n_clients_on_fac > 0 else 0
+    # Init 3: Cheapest facility bias
+    if (time.time() - global_start) < 41:
+        assignment = []
+        for j in range(n_clients):
+            best_fac = min(range(n_facilities),
+                          key=lambda i: assign_costs[i][j] + 0.1 * opening_costs[i])
+            assignment.append(best_fac)
+        assignment = local_search(assignment, 10, global_start)
+        cost = total_cost(assignment)
+        if cost < best_cost:
+            best_cost = cost
+            best_assignment = assignment[:]
 
-                # Aggressive closure: close if few clients and opening cost is high per client
-                should_close = (total_reassign_cost_delta < savings) or \
-                              (n_clients_on_fac <= 2 and savings > avg_client_cost * 0.5)
-
-                if should_close:
-                    for j, new_fac in reassignments:
-                        assignment[j] = new_fac
-
-    return assignment
+    return best_assignment if best_assignment else [0] * n_clients
