@@ -4,21 +4,6 @@ List of ideas to test to improve how the Scientist conducts their work.
 DO NOT include (or consider) any problem specific ideas.
 RED FLAG that you need to given seperate advice for each problem.
 
-## Study 4 hypothesis — ✓ PASSED
-
-**Result:** Failure diagnosis + time profiling + aggressive exploration **VALIDATED**.
-- QAP: restored 80-100× efficiency (674% improvement) — guidance fundamentally correct.
-- facloc: 27.6% sustained improvement.
-- However: **severe divergence detected**. gc stuck at 40-trial plateau (4.7% success rate). lop at 16% error rate.
-- **Key learning:** The guidance works well for some problems but not universally. Study 5 must reduce divergence.
-
-## Study 5 hypothesis — Anti-plateau strategy (ACTIVE)
-
-**Core test:** Strengthen plateau-breaking and error-first guidance from "suggested" to "mandatory protocols."
-- **For gc (40-trial plateau):** Current guidance has plateau-detection text but appears not mandatory enough. Strengthen: "If plateau > 10 trials, MUST diversify next trial." Make restarting non-negotiable.
-- **For lop (16% error rate):** Current error-first guidance exists but is insufficiently aggressive. Strengthen: "If ANY crash in first 30% of budget, PAUSE new ideas. Spend next ~5 trials isolating root cause (instance size, seed, phase). Do not resume exploration until crash is fixed or documented as non-deterministic."
-- **Generic principle change:** Reframe from "try diversification" (optional) to "mandatory protocol: plateau > 10 trials = MUST change strategy that trial. Error in early budget = MUST isolate before continuing."
-- **Success metric:** All problems improve (no severe divergence). gc breaks 40-trial plateau. lop error rate drops to <5%.
 
 ## Untested ideas
 
