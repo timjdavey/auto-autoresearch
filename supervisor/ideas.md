@@ -5,6 +5,22 @@ DO NOT include (or consider) any problem specific ideas.
 RED FLAG that you need to given seperate advice for each problem.
 
 
+## Prioritized for Study 2
+
+*(insights from Study 1 baseline that should shape next refinement)*
+
+1. **Plateau-breaking diversification:** Study 1 showed all problems hitting plateaus by trial ~10–20. Guidance mentions diversification but Scientists didn't aggressively pursue it. Consider:
+   - Explicit "restart with new seed + parameter variation" suggestion after plateau detected
+   - Concrete examples of what to try (2-opt for 1-opt solvers, different tie-breaking, multi-phase approaches)
+
+2. **Weak-problem support:** QAP (13.8%) and LOP (9.6%) vastly underperform facloc (64%) and maxsat (92%). This may be:
+   - Solver design gaps (missing key neighborhoods like 2-opt, 3-opt)
+   - Time budget misalignment (lop had timeouts on large instances)
+   - Algorithm-problem fit issues (greedy + 1-opt may be insufficient for these structures)
+   - Action: Post-Study 1, diagnose QAP and LOP failures in detail before widening guidance changes.
+
+3. **Early error handling proved robust:** GC timeout at trial 10, LOP timeouts at trials 2/7 were logged cleanly and didn't crash studies. Error-first protocol in guidance is working; consider highlighting success in ideas.
+
 ## Untested ideas
 
 - Memory: each new trial gets a new Scientist, so what files should the Scientist have to maintain pass it's thinking on most efficiently and effectively? e.g. a scratchpad. As searching through old train.py is expensive & slow & doesn't show any insights.

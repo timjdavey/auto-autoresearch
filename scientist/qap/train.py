@@ -10,8 +10,6 @@ The agent should improve this to maximise avg_improvement across all instances.
 
 
 import random
-import time
-
 
 def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
     """
@@ -34,102 +32,159 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
     if n == 1:
         return [0]
 
-    start_time = time.time()
-    time_limit = 55  # Leave 5s margin before hard 60s limit
-
-    def compute_cost(assignment):
-        """Compute QAP objective."""
+    def calculate_cost(assignment):
         cost = 0
         for i in range(n):
-            pi = assignment[i]
             for j in range(n):
-                cost += flow[i][j] * distance[pi][assignment[j]]
+                cost += flow[i][j] * distance[assignment[i]][assignment[j]]
         return cost
 
-    def nearest_neighbor(start_facility=0, randomized=False):
-        """Greedy nearest neighbor construction with optional randomization."""
+    def calculate_delta(assignment, i, j):
+        """Calculate cost change when swapping facilities i and j."""
+        cost_before = 0
+        cost_after = 0
+        for k in range(n):
+            if k != i and k != j:
+                cost_before += flow[i][k] * distance[assignment[i]][assignment[k]]
+                cost_before += flow[k][i] * distance[assignment[k]][assignment[i]]
+                cost_before += flow[j][k] * distance[assignment[j]][assignment[k]]
+                cost_before += flow[k][j] * distance[assignment[k]][assignment[j]]
+
+                cost_after += flow[i][k] * distance[assignment[j]][assignment[k]]
+                cost_after += flow[k][i] * distance[assignment[k]][assignment[j]]
+                cost_after += flow[j][k] * distance[assignment[i]][assignment[k]]
+                cost_after += flow[k][j] * distance[assignment[k]][assignment[i]]
+
+        cost_before += flow[i][j] * distance[assignment[i]][assignment[j]]
+        cost_before += flow[j][i] * distance[assignment[j]][assignment[i]]
+
+        cost_after += flow[i][j] * distance[assignment[j]][assignment[i]]
+        cost_after += flow[j][i] * distance[assignment[i]][assignment[j]]
+
+        return cost_after - cost_before
+
+    def greedy_init(start_facility=0, flow_weighted=False):
+        """Greedy construction heuristic starting from a specific facility.
+
+        If flow_weighted=True, order facilities by total flow (high-flow first).
+        This prioritizes assigning high-impact facilities to good locations.
+        If flow_weighted=2, use reverse order (low-flow first) for diversification.
+        """
         assignment = [-1] * n
-        unassigned_locations = set(range(n))
-        assignment[start_facility] = unassigned_locations.pop()
-        assigned_facilities = {start_facility}
+        available = set(range(n))
 
-        while len(assigned_facilities) < n:
-            # Find candidates: facilities with high flow to assigned facilities
-            candidates = []
-            max_score = -1
-            for f in range(n):
-                if f in assigned_facilities:
-                    continue
-                score = sum(flow[f][g] for g in assigned_facilities)
-                candidates.append((score, f))
-                if score > max_score:
-                    max_score = score
+        if flow_weighted == 1:
+            # Order by sum of flows (descending) — high-flow facilities first
+            flows = [sum(flow[i]) for i in range(n)]
+            order = sorted(range(n), key=lambda i: -flows[i])
+        elif flow_weighted == 2:
+            # Reverse order — low-flow facilities first
+            flows = [sum(flow[i]) for i in range(n)]
+            order = sorted(range(n), key=lambda i: flows[i])
+        else:
+            # Original order starting from start_facility
+            order = list(range(start_facility, n)) + list(range(start_facility))
 
-            if randomized and len(candidates) > 1:
-                # In randomized mode, consider top candidates (within 20% of best)
-                threshold = max_score * 0.8
-                top_candidates = [f for s, f in candidates if s >= threshold]
-                best_facility = random.choice(top_candidates) if top_candidates else candidates[0][1]
-            else:
-                best_facility = max(candidates, key=lambda x: x[0])[1]
+        for facility in order:
+            if assignment[facility] != -1:
+                continue
+            best_loc = None
+            best_delta = float('inf')
 
-            # Find location that minimizes cost to assigned locations
-            best_location = -1
-            best_cost = float('inf')
-            for loc in unassigned_locations:
-                cost = sum(flow[best_facility][g] * distance[loc][assignment[g]]
-                          for g in assigned_facilities)
-                if cost < best_cost:
-                    best_cost = cost
-                    best_location = loc
+            for loc in available:
+                assignment[facility] = loc
+                delta = 0
+                for i in range(n):
+                    if i != facility and assignment[i] != -1:
+                        for j in range(n):
+                            delta += flow[i][facility] * distance[assignment[i]][loc]
+                            delta += flow[facility][i] * distance[loc][assignment[i]]
+                delta += flow[facility][facility] * distance[loc][loc]
 
-            assignment[best_facility] = best_location
-            unassigned_locations.remove(best_location)
-            assigned_facilities.add(best_facility)
+                if delta < best_delta:
+                    best_delta = delta
+                    best_loc = loc
+
+            assignment[facility] = best_loc
+            available.remove(best_loc)
 
         return assignment
 
-    def two_opt(assignment):
-        """2-opt local search with first-improvement strategy (faster exploration)."""
-        improved = True
-        while improved and time.time() - start_time < time_limit:
-            improved = False
-            current_cost = compute_cost(assignment)
+    def random_init():
+        """Random initialization."""
+        assignment = list(range(n))
+        random.shuffle(assignment)
+        return assignment
 
-            for i in range(n):
-                for j in range(i + 2, n):
-                    # Swap and compute cost change
-                    assignment[i], assignment[j] = assignment[j], assignment[i]
-                    new_cost = compute_cost(assignment)
-                    assignment[i], assignment[j] = assignment[j], assignment[i]
+    def local_search(assignment, ils_depth=6):
+        """2-opt local search with first-improvement + iterated local search."""
+        best_assignment = assignment[:]
+        best_cost = calculate_cost(best_assignment)
 
-                    if new_cost < current_cost:
-                        # Accept first improvement found
-                        assignment[i], assignment[j] = assignment[j], assignment[i]
-                        improved = True
+        for iteration in range(ils_depth):  # ILS iterations with double-swap perturbations
+            # 2-opt first-improvement
+            improved = True
+            while improved:
+                improved = False
+                for i in range(n):
+                    for j in range(i + 1, n):
+                        delta = calculate_delta(assignment, i, j)
+                        if delta < -1e-9:
+                            assignment[i], assignment[j] = assignment[j], assignment[i]
+                            improved = True
+                            break
+                    if improved:
                         break
 
-                if improved:
-                    break
+            # Check if this is better
+            cost = calculate_cost(assignment)
+            if cost < best_cost:
+                best_cost = cost
+                best_assignment = assignment[:]
 
-        return assignment
+            # Perturbation: double random swap for stronger escape (ILS intensification)
+            if iteration < ils_depth - 1:
+                # First swap
+                i = random.randint(0, n - 1)
+                j = random.randint(0, n - 1)
+                while j == i:
+                    j = random.randint(0, n - 1)
+                assignment[i], assignment[j] = assignment[j], assignment[i]
 
-    # Multi-start: try multiple randomized nearest neighbor constructions
+                # Second swap for stronger perturbation
+                i = random.randint(0, n - 1)
+                j = random.randint(0, n - 1)
+                while j == i:
+                    j = random.randint(0, n - 1)
+                assignment[i], assignment[j] = assignment[j], assignment[i]
+
+        return best_assignment
+
+    # --- Multi-start: 1 greedy + adaptive random restarts ---
     best_assignment = None
     best_cost = float('inf')
-    num_starts = 6
 
-    for start_idx in range(num_starts):
-        if time.time() - start_time >= time_limit:
-            break
+    # Single greedy initialization
+    assignment = greedy_init()
+    assignment = local_search(assignment, ils_depth=7)
+    cost = calculate_cost(assignment)
+    best_assignment = assignment
+    best_cost = cost
 
-        # Use randomized NN for diversity
-        candidate = nearest_neighbor(start_facility=start_idx % n, randomized=True)
-        candidate = two_opt(candidate)
+    # Run random restarts with adaptive count based on size
+    if n <= 50:
+        num_runs = 25
+    elif n <= 60:
+        num_runs = 16
+    else:
+        num_runs = 10
 
-        cost = compute_cost(candidate)
+    for _ in range(num_runs):
+        assignment = random_init()
+        assignment = local_search(assignment, ils_depth=7)
+        cost = calculate_cost(assignment)
         if cost < best_cost:
             best_cost = cost
-            best_assignment = candidate
+            best_assignment = assignment
 
-    return best_assignment if best_assignment is not None else nearest_neighbor(start_facility=0, randomized=False)
+    return best_assignment
