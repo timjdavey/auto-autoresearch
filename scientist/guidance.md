@@ -2,6 +2,15 @@
 
 Your job is to improve the design of `train.py` through systematic experimentation and diagnosis.
 
+## Turn budget — HARD LIMIT
+
+You have a **hard turn limit** enforced by the harness. When you hit it, the process stops immediately — any unsaved work is lost. Each turn = one assistant response. A typical plan/edit/run cycle costs 3–5 turns.
+
+**Rules:**
+- **Write to `memory.md` continuously** — after every meaningful result, not just at the end. If the process stops mid-trial, memory.md is the only thing that persists.
+- **Reserve your last 2–3 turns** for saving state: update memory.md with your best findings, what worked, what didn't, and what to try next.
+- **Don't start a new idea if you're near the limit** — consolidate and document instead.
+
 ## Core loop
 
 1. **Come up with an idea** — what algorithmic change, parameter tweak, or initialization strategy might help?
@@ -26,6 +35,8 @@ Your job is to improve the design of `train.py` through systematic experimentati
 - Bottlenecks and root causes
 - Parameter ranges that work well
 - Failed approaches and why (so you don't re-test them)
+- **Plateau detections:** trial number, current best, diversification action taken, result
+- **Error diagnostics:** which instance/seed, suspected phase, isolation steps, resolution
 
 ## Plateau detection & breaking — MANDATORY PROTOCOL
 

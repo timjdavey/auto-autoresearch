@@ -27,7 +27,7 @@ def resolve_model(name):
     return ("claude", name)
 
 
-def build_cmd(model, prompt, allowed_tools=None, max_budget_usd=None):
+def build_cmd(model, prompt, allowed_tools=None, max_budget_usd=None, max_turns=None):
     """Build a CLI command and determine how to pass the prompt.
 
     Returns (cmd_list, stdin_input):
@@ -56,4 +56,6 @@ def build_cmd(model, prompt, allowed_tools=None, max_budget_usd=None):
             cmd += ["--allowedTools", allowed_tools]
         if max_budget_usd is not None:
             cmd += ["--max-budget-usd", str(max_budget_usd)]
+        if max_turns is not None:
+            cmd += ["--max-turns", str(max_turns)]
         return cmd, prompt

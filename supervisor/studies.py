@@ -1,7 +1,5 @@
 """Runs a study: one or more Scientist invocations across all problems."""
 
-import csv
-import importlib
 import os
 import shutil
 import signal
@@ -20,7 +18,7 @@ from supervisor.evaluate import load_results
 
 DEFAULT_MODEL = "haiku"
 DEFAULT_TRIALS = 10
-DEFAULT_TIMEOUT = 600
+DEFAULT_MAX_TURNS = 25
 DEFAULT_MAX_BUDGET = 0.25
 ALLOWED_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
 
@@ -43,28 +41,7 @@ def _sigint_handler(*_):
 signal.signal(signal.SIGINT, _sigint_handler)
 
 
-def _log_timeout(problem_dir, problem_name, trial_timeout):
-    """Append a scientist_timeout row to results.tsv so the Scientist sees what happened."""
-    # Import the problem's prepare module to get its RESULT_FIELDS
-    mod = importlib.import_module(f"scientist.{problem_name}.prepare")
-    fields = mod.RESULT_FIELDS
-
-    row = {f: "" for f in fields}
-    row["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    row["status"] = "scientist_timeout"
-    row["training_time"] = trial_timeout
-    row["notes"] = f"Scientist process killed after {trial_timeout}s"
-
-    results_path = problem_dir / "results.tsv"
-    write_header = not results_path.exists()
-    with open(results_path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, delimiter="\t")
-        if write_header:
-            writer.writeheader()
-        writer.writerow(row)
-
-
-def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
+def run_trial(problem, trial_num, timestamp, log_dir, model, max_turns, max_budget_usd=None):
     """Run a single trial for a single problem. Returns (problem, trial_num, status, elapsed)."""
     problem_dir = SCIENTIST_DIR / problem
     archive_dir = problem_dir / "archive"
@@ -75,7 +52,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_
         shutil.copy(train_path, archive_dir / f"trial-{trial_num:03d}.py")
 
     prompt = f"Read and follow scientist/{problem}/program.md"
-    cli_cmd, stdin_input = build_cmd(model, prompt, ALLOWED_TOOLS, max_budget_usd=max_budget_usd)
+    cli_cmd, stdin_input = build_cmd(model, prompt, ALLOWED_TOOLS, max_budget_usd=max_budget_usd, max_turns=max_turns)
     log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
     start = time.monotonic()
     with open(log_file, "w") as f:
@@ -90,17 +67,7 @@ def run_trial(problem, trial_num, timestamp, log_dir, model, trial_timeout, max_
         with _pgid_lock:
             _active_pgids.add(proc.pid)
         try:
-            proc.communicate(input=stdin_input, timeout=trial_timeout)
-        except subprocess.TimeoutExpired:
-            elapsed = time.monotonic() - start
-            os.killpg(proc.pid, signal.SIGTERM)
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGKILL)
-                proc.wait()
-            _log_timeout(problem_dir, problem, trial_timeout)
-            return problem, trial_num, "TIMEOUT", elapsed
+            proc.communicate(input=stdin_input)
         finally:
             with _pgid_lock:
                 _active_pgids.discard(proc.pid)
@@ -127,19 +94,19 @@ def _curate_archive(problem_dir):
         shutil.copy(best_file, archive_dir / "best.py")
 
 
-def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_timeout, max_budget_usd=None):
+def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, max_turns, max_budget_usd=None):
     """Run all trials for a single problem sequentially."""
     study_start = time.monotonic()
     problem_label = problem[:16].ljust(16)
     for i in range(1, num_trials + 1):
         problem, trial_num, status, elapsed = run_trial(
-            problem, i, timestamp, log_dir, model, trial_timeout, max_budget_usd=max_budget_usd
+            problem, i, timestamp, log_dir, model, max_turns, max_budget_usd=max_budget_usd
         )
         total = time.monotonic() - study_start
 
         # Read metric from results.tsv for richer output
         metric_str = ""
-        if status != "TIMEOUT":
+        if status == "done":
             results_path = SCIENTIST_DIR / problem / "results.tsv"
             try:
                 rows = load_results(results_path)
@@ -167,7 +134,7 @@ def _run_problem_trials(problem, num_trials, timestamp, log_dir, model, trial_ti
             pass
 
 
-def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DEFAULT_MODEL, sequential=True, max_budget_usd=DEFAULT_MAX_BUDGET):
+def run_study(num_trials=DEFAULT_TRIALS, max_turns=DEFAULT_MAX_TURNS, model=DEFAULT_MODEL, sequential=True, max_budget_usd=DEFAULT_MAX_BUDGET):
     """Run a study across all problems and return the log directory path."""
     problems = discover_problems()
     if not problems:
@@ -176,7 +143,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
     print(f"Problems: {', '.join(problems)}", file=sys.stderr)
 
     # Reset per-problem state for a clean slate
-    soft_reset(problems)
+    soft_reset(problems, verbose=False)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = Path("logs") / timestamp
@@ -188,7 +155,7 @@ def run_study(num_trials=DEFAULT_TRIALS, trial_timeout=DEFAULT_TIMEOUT, model=DE
         futures = {
             pool.submit(
                 _run_problem_trials, problem, num_trials,
-                timestamp, log_dir, model, trial_timeout, max_budget_usd
+                timestamp, log_dir, model, max_turns, max_budget_usd
             ): problem
             for problem in problems
         }

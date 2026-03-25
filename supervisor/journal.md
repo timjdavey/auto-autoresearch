@@ -48,7 +48,7 @@ A chronological log of studies — one entry per study, recording what changed, 
 
 ### Study 5 — Mandatory protocols for plateaus and errors
 
-**Status:** ✓ Planning phase complete. Guidance updated 2026-03-25.
+**Status:** ✓ PRE-STUDY review complete. Guidance finalized 2026-03-25. Ready for execution.
 
 **Diagnosis of Study 4 divergence:**
 - GC hit a 40-trial plateau despite having plateau-breaking guidance. This suggests the guidance was too permissive: "try diversification" was treated as optional.

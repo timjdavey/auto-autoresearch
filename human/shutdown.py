@@ -9,21 +9,25 @@
 # Usage:
 #   uv run shutdown
 
+import argparse
 import subprocess
 import sys
 
 
-PATTERNS = [
+SCIENTIST_PATTERNS = [
     r"scientist\..*\.prepare",
     r"claude.*scientist",
 ]
 
+CLAUDE_PATTERNS = [
+    r"claude",
+]
 
-def shutdown():
-    """Kill processes matching scientist patterns."""
+
+def kill_patterns(patterns, label):
+    """Kill processes matching the given patterns."""
     killed_any = False
-    for pattern in PATTERNS:
-        # pgrep first to report what will be killed
+    for pattern in patterns:
         result = subprocess.run(
             ["pgrep", "-fl", pattern],
             capture_output=True, text=True,
@@ -35,12 +39,23 @@ def shutdown():
             subprocess.run(["pkill", "-f", pattern])
 
     if not killed_any:
-        print("  No scientist processes found.", file=sys.stderr)
+        print(f"  No {label} processes found.", file=sys.stderr)
 
 
 def main():
-    print("Shutdown: killing all scientist processes", file=sys.stderr)
-    shutdown()
+    parser = argparse.ArgumentParser(description="Kill scientist or Claude processes.")
+    parser.add_argument(
+        "--all", action="store_true",
+        help="Kill all Claude processes, not just scientist ones.",
+    )
+    args = parser.parse_args()
+
+    if args.all:
+        print("Shutdown: killing ALL Claude processes", file=sys.stderr)
+        kill_patterns(CLAUDE_PATTERNS, "Claude")
+    else:
+        print("Shutdown: killing all scientist processes", file=sys.stderr)
+        kill_patterns(SCIENTIST_PATTERNS, "scientist")
     print("Done.", file=sys.stderr)
 
 

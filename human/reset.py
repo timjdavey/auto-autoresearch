@@ -19,11 +19,12 @@ from pathlib import Path
 from scientist import SCIENTIST_DIR, discover_problems
 
 
-def soft_reset(problems=None):
+def soft_reset(problems=None, verbose=True):
     """Reset per-problem state: archive timestamps, results.tsv, and train.py.
 
     Args:
         problems: list of problem names, or None for all discovered problems.
+        verbose: if True, print each deleted/reset file to stderr.
     """
     if problems is None:
         problems = discover_problems()
@@ -31,7 +32,8 @@ def soft_reset(problems=None):
     for problem in problems:
         problem_dir = SCIENTIST_DIR / problem
         if not problem_dir.is_dir():
-            print(f"  Warning: problem directory {problem_dir} not found, skipping", file=sys.stderr)
+            if verbose:
+                print(f"  Warning: problem directory {problem_dir} not found, skipping", file=sys.stderr)
             continue
 
         # Remove trial snapshots, best.py, and legacy timestamp dirs (preserve original.py)
@@ -40,20 +42,24 @@ def soft_reset(problems=None):
             for child in archive_dir.iterdir():
                 if child.is_dir():
                     shutil.rmtree(child)
-                    print(f"  Deleted {child}", file=sys.stderr)
+                    if verbose:
+                        print(f"  Deleted {child}", file=sys.stderr)
             for trial_file in sorted(archive_dir.glob("trial-*.py")):
                 trial_file.unlink()
-                print(f"  Deleted {trial_file}", file=sys.stderr)
+                if verbose:
+                    print(f"  Deleted {trial_file}", file=sys.stderr)
             best_path = archive_dir / "best.py"
             if best_path.exists():
                 best_path.unlink()
-                print(f"  Deleted {best_path}", file=sys.stderr)
+                if verbose:
+                    print(f"  Deleted {best_path}", file=sys.stderr)
 
         # Delete results
         results = problem_dir / "results.tsv"
         if results.exists():
             results.unlink()
-            print(f"  Deleted {results}", file=sys.stderr)
+            if verbose:
+                print(f"  Deleted {results}", file=sys.stderr)
 
         # Reset memory.md
         (problem_dir / "memory.md").write_text("")
@@ -63,7 +69,8 @@ def soft_reset(problems=None):
         train = problem_dir / "train.py"
         if original and original.exists():
             shutil.copy(original, train)
-            print(f"  Reset {train} from {original}", file=sys.stderr)
+            if verbose:
+                print(f"  Reset {train} from {original}", file=sys.stderr)
 
 
 def hard_reset():
