@@ -46,6 +46,6 @@ Instances are random 3-SAT near the satisfiability phase transition (clause-to-v
 ## Constraints
 
 - **Time limit**: 60 seconds per `solve()` call.
-- **Trial timeout**: Your entire thinking process (reading, planning, editing, and running evaluation) must complete within **10 minutes**. If you exceed this, the trial is killed and counts as a failure.
+- **Turn limit**: You have a hard limit of **15 turns** (enforced by the harness). Plan your work to fit within this budget.
 - **Single file**: All code in `train.py`. You may import from the standard library plus `numpy` and `scipy`.
 - **No hardcoding**: Your solver must work on arbitrary CNF formulas. Do not detect which instance is being solved.

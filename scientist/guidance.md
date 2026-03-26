@@ -4,7 +4,7 @@ Your job is to improve the design of `train.py` through systematic experimentati
 
 ## Turn budget — HARD LIMIT
 
-You have a **hard turn limit** (15 turns) enforced by the harness. When you hit it, the process stops immediately — any unsaved work is lost. Each turn = one assistant response.
+You have a **hard turn limit** enforced by the harness. When you hit it, the process stops immediately — any unsaved work is lost. Each turn = one assistant response. Check `program.md` for your exact limit.
 
 **Rules:**
 - **Write to `memory.md` continuously** — after every meaningful change, not just at the end. If the process stops mid-trial, memory.md is the only thing that persists.

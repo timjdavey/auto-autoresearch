@@ -10,9 +10,9 @@
 # Usage:
 #   uv run experiment                          # 20 studies, opus (default)
 #   uv run experiment --studies 3              # 3 studies
-#   uv run experiment --timeout 7200           # 2-hour per-study timeout
+#   uv run experiment --turns 20               # 20 max turns per scientist trial
 #   uv run experiment --trials 5               # 5 trials per study
-#   uv run experiment --model sonnet           # use sonnet for Supervisor
+#   uv run experiment --model sonnet           # use sonnet for Scientist
 
 import argparse
 import dataclasses
@@ -35,11 +35,6 @@ from supervisor.evaluate import analyse_and_save, load_results
 # Constants
 # ---------------------------------------------------------------------------
 
-# Experiment defaults
-DEFAULT_MODEL = "opus"
-DEFAULT_STUDIES = 20
-DEFAULT_STUDY_TIMEOUT = 36_000  # 10 hours per study
-
 # Scientist
 SCIENTIST_MODEL = "haiku"
 SCIENTIST_TRIALS = 10
@@ -48,7 +43,8 @@ SCIENTIST_MAX_BUDGET = 0.25
 SCIENTIST_TOOLS = "Read,Edit,Write"
 
 # Supervisor
-SUPERVISOR_MAX_BUDGET = 2.0
+SUPERVISOR_MODEL = "opus"
+DEFAULT_STUDIES = 20
 SUPERVISOR_TOOLS = "Read,Edit,Write"
 SUPERVISOR_PRE_PROMPT = "Read and follow supervisor/method.md — PRE-STUDY phase only."
 SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY phase only."
@@ -109,11 +105,8 @@ def build_cmd(model, *, allowed_tools=None, max_budget_usd=None, max_turns=None)
     return cmd
 
 
-def _run_cli(cmd, *, prompt, log_path, timeout=None):
-    """Run a CLI subprocess with pgid tracking.
-
-    Returns (returncode, timed_out).
-    """
+def _run_cli(cmd, *, prompt, log_path):
+    """Run a CLI subprocess with pgid tracking. Returns the process returncode."""
     with open(log_path, "w") as f:
         proc = subprocess.Popen(
             cmd,
@@ -125,21 +118,12 @@ def _run_cli(cmd, *, prompt, log_path, timeout=None):
         )
     with _child_pgids_lock:
         _child_pgids.add(proc.pid)
-    timed_out = False
     try:
-        proc.communicate(input=prompt, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        os.killpg(proc.pid, signal.SIGTERM)
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
+        proc.communicate(input=prompt)
     finally:
         with _child_pgids_lock:
             _child_pgids.discard(proc.pid)
-    return proc.returncode, timed_out
+    return proc.returncode
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +148,7 @@ def run_trial(problem, trial_num, *, log_dir, model=SCIENTIST_MODEL,
     log_file = log_dir / f"{problem}-trial-{trial_num:03d}.jsonl"
 
     start = time.monotonic()
-    returncode, _ = _run_cli(cmd, prompt=prompt, log_path=log_file)
+    returncode = _run_cli(cmd, prompt=prompt, log_path=log_file)
 
     # Post phase: harness evaluates train.py (Scientists cannot call prepare.py)
     eval_result = subprocess.run(
@@ -264,22 +248,19 @@ def run_study(*, num_trials=SCIENTIST_TRIALS, max_turns=SCIENTIST_MAX_TURNS,
 # ---------------------------------------------------------------------------
 
 
-def run_supervisor(prompt, *, model, log_file, timeout, max_budget_usd=SUPERVISOR_MAX_BUDGET):
+def run_supervisor(prompt, *, model, log_file):
     """Run a Supervisor CLI call. Returns True on success."""
-    cmd = build_cmd(model, allowed_tools=SUPERVISOR_TOOLS, max_budget_usd=max_budget_usd)
-    returncode, timed_out = _run_cli(cmd, prompt=prompt, log_path=log_file, timeout=timeout)
+    cmd = build_cmd(model, allowed_tools=SUPERVISOR_TOOLS)
+    returncode = _run_cli(cmd, prompt=prompt, log_path=log_file)
 
-    if timed_out:
-        print(f"  Supervisor call timed out after {timeout}s", file=sys.stderr)
-        return False
     if returncode != 0:
         print(f"  Supervisor call failed (exit code {returncode})", file=sys.stderr)
         return False
     return True
 
 
-def run_experiment(*, num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_TIMEOUT,
-                   model=DEFAULT_MODEL, num_trials=None, sequential=True):
+def run_experiment(*, num_studies=SUPERVISOR_STUDIES, scientist_model=SCIENTIST_MODEL,
+                   max_turns=SCIENTIST_MAX_TURNS, num_trials=None, sequential=True, commit=False):
     """Run an experiment of sequential studies."""
     problems = discover_problems()
     print(f"Problems: {', '.join(problems)}", file=sys.stderr)
@@ -294,30 +275,32 @@ def run_experiment(*, num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_T
             shutil.copytree("scientist", archive_dir, ignore=shutil.ignore_patterns("__pycache__"))
             print(f"  Archived scientist/ → {archive_dir}", file=sys.stderr)
 
-            # Git commit current state
-            result = subprocess.run(["git", "add", "-A"], capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"  Warning: git add failed: {result.stderr.strip()}", file=sys.stderr)
-            result = subprocess.run(
-                ["git", "commit", "-m", f"archive study {study_timestamp}"],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0 and "nothing to commit" not in result.stdout:
-                print(f"  Warning: git commit failed: {result.stderr.strip()}", file=sys.stderr)
+            # Git commit current state (only with --commit flag)
+            if commit:
+                result = subprocess.run(["git", "add", "-A"], capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"  Warning: git add failed: {result.stderr.strip()}", file=sys.stderr)
+                result = subprocess.run(
+                    ["git", "commit", "-m", f"archive study {study_timestamp}"],
+                    capture_output=True, text=True,
+                )
+                if result.returncode != 0 and "nothing to commit" not in result.stdout:
+                    print(f"  Warning: git commit failed: {result.stderr.strip()}", file=sys.stderr)
 
             log_dir = Path("logs") / study_timestamp
             log_dir.mkdir(parents=True, exist_ok=True)
 
             # Phase 1: Pre-study Supervisor call
             print("  Phase 1: Pre-study planning", file=sys.stderr)
-            if not run_supervisor(SUPERVISOR_PRE_PROMPT, model=model,
-                                  log_file=log_dir / "pre-study.jsonl", timeout=study_timeout):
+            if not run_supervisor(SUPERVISOR_PRE_PROMPT, model=SUPERVISOR_MODEL,
+                                  log_file=log_dir / "pre-study.jsonl"):
                 print(f"  Pre-study supervisor failed, skipping study {i}", file=sys.stderr)
                 continue
 
             # Phase 2: Run the study
             print("  Phase 2: Running trials", file=sys.stderr)
-            study_kwargs = {"sequential": sequential, "max_budget_usd": SCIENTIST_MAX_BUDGET}
+            study_kwargs = {"sequential": sequential, "max_budget_usd": SCIENTIST_MAX_BUDGET,
+                           "model": scientist_model, "max_turns": max_turns}
             if num_trials is not None:
                 study_kwargs["num_trials"] = num_trials
             run_study(**study_kwargs)
@@ -345,8 +328,8 @@ def run_experiment(*, num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_T
 
             # Phase 3: Post-study Supervisor call
             print("  Phase 3: Post-study review", file=sys.stderr)
-            if not run_supervisor(SUPERVISOR_POST_PROMPT, model=model,
-                                  log_file=log_dir / "post-study.jsonl", timeout=study_timeout):
+            if not run_supervisor(SUPERVISOR_POST_PROMPT, model=SUPERVISOR_MODEL,
+                                  log_file=log_dir / "post-study.jsonl"):
                 print("  Warning: post-study supervisor failed (study results are saved)", file=sys.stderr)
 
         except Exception as e:
@@ -361,26 +344,29 @@ def run_experiment(*, num_studies=DEFAULT_STUDIES, study_timeout=DEFAULT_STUDY_T
 
 def main():
     parser = argparse.ArgumentParser(description="Run an experiment: one or more Supervisor studies.")
-    parser.add_argument("--studies", type=int, default=DEFAULT_STUDIES,
-                        help=f"Number of studies (default: {DEFAULT_STUDIES})")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_STUDY_TIMEOUT,
-                        help=f"Per-study timeout in seconds (default: {DEFAULT_STUDY_TIMEOUT})")
-    parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
-                        help=f"Model for Supervisor (default: {DEFAULT_MODEL})")
+    parser.add_argument("--studies", type=int, default=SUPERVISOR_STUDIES,
+                        help=f"Number of studies (default: {SUPERVISOR_STUDIES})")
+    parser.add_argument("--turns", type=int, default=SCIENTIST_MAX_TURNS,
+                        help=f"Max turns per Scientist trial (default: {SCIENTIST_MAX_TURNS})")
+    parser.add_argument("--model", type=str, default=SCIENTIST_MODEL,
+                        help=f"Model for Scientist (default: {SCIENTIST_MODEL})")
     parser.add_argument("--trials", type=int, default=None,
                         help="Number of trials per study (default: study default)")
     parser.add_argument("--sequential", action="store_true", default=True,
                         help="Run problems sequentially (default, avoids rate limits)")
     parser.add_argument("--parallel", action="store_true",
                         help="Run problems in parallel")
+    parser.add_argument("--commit", action="store_true",
+                        help="Git commit after archiving each study")
     args = parser.parse_args()
 
     run_experiment(
         num_studies=args.studies,
-        study_timeout=args.timeout,
-        model=args.model,
+        scientist_model=args.model,
+        max_turns=args.turns,
         num_trials=args.trials,
         sequential=not args.parallel,
+        commit=args.commit,
     )
 
 
