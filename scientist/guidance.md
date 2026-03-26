@@ -74,10 +74,9 @@ When plateau ≥ 10 trials, you MUST take a diversification action in the very n
 
 Local search is a powerful way to escape plateaus. Understanding what "neighborhoods" mean helps you vary your solver intelligently.
 
-**CRITICAL CHECKPOINT — before suggesting variants:**
-- **Check your current `train.py` carefully:** Are you already using 2-opt? 3-opt? Multi-start? If yes, **skip to initialization diversity or timeout management** (see below). Suggesting "try 2-opt" when you already have it wastes budget on parameter tweaking instead of algorithmic redesign.
-- **If you don't have advanced neighborhoods**, then explore the options below.
-- **Red flag:** If you've already tried varying a neighborhood's parameters (iterations, acceptance criteria) without improvement, the issue is NOT more parameter tuning — it's that the neighborhood itself is not the bottleneck. Switch strategies.
+**Before suggesting variants:** Check your current `train.py` carefully. If you already have 2-opt, 3-opt, or multi-start, focus on the strengths and weaknesses of your current approach. Don't waste time on parameter tweaking if the neighborhood itself isn't the bottleneck.
+
+**Red flag:** If you've already tried varying a neighborhood's parameters (iterations, acceptance criteria) without improvement, the issue is NOT more parameter tuning — it's that the neighborhood itself is not the bottleneck. Switch to initialization diversity (see below) or timeout/phase restructuring instead.
 
 **Common neighborhoods (in increasing complexity):**
 - **1-opt (swap):** Change one element at a time. Fast, finds nearby improvements, weak on hard problems.
@@ -99,20 +98,34 @@ Local search is a powerful way to escape plateaus. Understanding what "neighborh
 - **Already using advanced neighborhoods and still stuck?** Don't tweak their parameters. Instead, try initialization diversity (different seeds, greedy variants, or problem-specific construction heuristics) or timeout/phase restructuring (see Timeout and Phase Profiling below).
 - **Stuck late (trial 40+)?** If profiling shows time available, try 3-opt on small instances only; otherwise accept local optimum or redesign.
 
-## Initialization diversity & timeout management — for problems with advanced neighborhoods
+## Initialization diversity — when local search alone doesn't break plateaus
 
-If you already have 2-opt, 3-opt, or other advanced neighborhoods and still plateau:
+If you're stuck on a plateau and have tried local search variants, initialization diversity is your next lever. Different starting solutions can escape the same local basin your current initialization gets trapped in.
 
-**Initialization diversity:**
-- **Multi-seed restarts:** Run your solver 5–10 times with different random seeds, keep best result. Fast to implement, orthogonal to neighborhood improvements.
-- **Greedy variants:** Use different construction heuristics (different cost weights, tiebreaker rules, ordering). Study data shows this is often overlooked even when 2-opt is exhausted.
-- **Problem-specific construction:** If you understand the problem structure (e.g., facility location clusters, graph colorability), seed your initial solution based on that insight.
+**Concrete strategies to try (in order of effort):**
 
-**Timeout and phase profiling:**
-- Which phase eats most of your budget? (initialization, construction, local search, restarts?) Profile with `print()` statements.
-- If local search dominates (>70% of time), consider: reduce iterations, switch to faster 1-opt for some runs, or add early termination (e.g., "stop 1-opt after 100 consecutive non-improving moves").
-- If initialization dominates, use a cheaper greedy method and invest savings in more restarts.
-- **Study data:** Problems that solved timeout issues via phase profiling achieved +10–15% improvement vs. those that just tweaked parameters.
+1. **Multi-seed restarts (easiest, 1 trial):**
+   - Run your solver 5–10 times with **different random seeds**, keep best result.
+   - Example: `for seed in [1, 42, 123, 456, 789]: best_result = max(best_result, solve(instance, seed))`
+   - Cost: ~2–5 times slower; benefit: avoids seed-specific local optima.
+
+2. **Greedy construction variants (easy, 1-2 trials):**
+   - Use different tie-breaking or ordering rules in your greedy construction phase.
+   - Examples:
+     - **Facility Location:** Try "random facility-first init" vs "demand-first init" vs "cost-weighted init"
+     - **Graph Colouring:** Try "high-degree-first ordering" vs "saturation-based ordering" vs "random ordering"
+     - **QAP/LOP:** Try "best marginal cost" vs "first-fit" vs "random tie-breaking"
+   - Cost: minimal (just reorder construction loop); benefit: different solution landscape, can escape plateaus.
+
+3. **Problem-specific construction (medium, 1-2 trials):**
+   - If you understand problem structure, seed your initial solution based on that insight.
+   - Examples:
+     - **Facility Location:** Start with a few "obvious" facilities (low cost or high demand) and build from there.
+     - **Graph Colouring:** Assign colors to high-degree nodes first, fill in easier nodes later.
+     - **LOP:** Order rows by some heuristic (sum of distances, correlation with target) instead of random.
+   - Cost: 1 trial to design + 1 to measure; benefit: leverages domain knowledge, often large gains.
+
+**When to try which:** If you're already stuck on a plateau (trial 10+) and local search variants didn't help, try multi-seed first (easiest, quick win). If that stalls too, try greedy variants or problem-specific construction.
 
 **Error-first exploration — MANDATORY PROTOCOL**
 

@@ -46,6 +46,19 @@ RED FLAG that you need to given seperate advice for each problem.
 - **GC:** Expected maintenance, Got +1.56% ✓ (but low trial count suggests noise)
 - **FacLoc:** Expected maintenance, Got +0.62% ✓ (marginal)
 
+## Study 4 Plan — RECOVERY & REFINEMENT
+
+**Hypothesis:** Study 2 guidance was clear and focused (neighborhood discussion + plateau breaking). Study 3 broke it by adding conditional "skip" instructions and vague guidance. Recovery: return to Study 2 baseline, remove problematic checkpoint, and add ONE concrete refinement: replace vague "Initialization diversity" section with concrete examples.
+
+**Changes:**
+1. **Remove CRITICAL CHECKPOINT from Neighborhood Structure** — the "If you already use 2-opt, skip to initialization diversity" instruction caused MaxSAT to lose context (-4.23%). Checkpoints that DELETE sections are dangerous. Keep the full neighborhood discussion.
+2. **Rewrite Initialization diversity section with concrete examples** — replace vague guidance with actionable strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization (random → greedy → multi-start)", "Use problem structure (facility-first for facloc, node-degree-ordering for GC)". This addresses Study 3's failure on weak problems (LOP, QAP).
+3. **Keep Study 2 structure intact** — Plateau detection, Neighborhood structure (minus checkpoint), Error-first exploration remain as proven.
+
+**Expected outcome:** Restore MaxSAT to 98.6%+, help weak problems with concrete initialization guidance, aggregate 41%+.
+
+---
+
 ## Untested ideas
 
 - Memory: each new trial gets a new Scientist, so what files should the Scientist have to maintain pass it's thinking on most efficiently and effectively? e.g. a scratchpad. As searching through old train.py is expensive & slow & doesn't show any insights.
@@ -91,6 +104,28 @@ RED FLAG that you need to given seperate advice for each problem.
 - **GC's marginal improvement signal:** Study 3 showed GC +1.56%, but trial count dropped (33 vs 50–56 expected). Need to isolate: is +1.56% real improvement or trial variation? Run Study 4 with stable trial budgets to clarify.
 - **Simplification as recovery:** Study 2 worked well (aggregate +1.25%, MaxSAT +6.2%), Study 3 broke everything. Hypothesis: Study 2 guidance was clear and focused; Study 3 added too much complexity (checkpoints, redirects, new sections). Recovery strategy: Return to Study 2 guidance as baseline for Study 4, test ONE small refinement in isolation.
 
+## Study 4 Implementation & Results — PARTIAL RECOVERY
+
+1. ✅ **Removed "skip" checkpoint:** Restored full neighborhood section (no deletion instructions).
+   - **Outcome:** MaxSAT jumped +4.93% (94.38% → 99.31%), best across all studies.
+   - **Root cause identified:** Study 3's "If you already use 2-opt, skip to initialization diversity" instruction caused Scientists to skip examples and context needed for neighborhood exploration. Confirmation: **Never use "skip" instructions in conditional guidance.**
+
+2. ❌ **Concrete initialization examples did NOT help weak problems:**
+   - Added explicit strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization (random → greedy → multi-start)", "Use problem-specific construction (facility-first for facloc, degree-ordering for GC)"
+   - **Outcome:** LOP crashed -4.18% (9.23% → 5.05%), QAP regressed -0.97% (13.41% → 12.44%). Both weak problems got worse.
+   - **Root cause:** LOP memory.md shows prior 35+ trials exhaustively tested initialization diversity (multi-seed, greedy variants, random) across trials 29–38, all failed. Study 4 guidance re-suggested these same strategies, causing Scientists to waste budget re-exploring known-dead parameter space instead of attempting fundamentally different algorithms (Tabu, SA, Lin-Kernighan).
+   - **Lesson:** Generic guidance cannot know which strategies are already exhausted on a problem. Weak problems need algorithmic redesign hints, not more parameter exploration.
+
+3. ✅ **FacLoc sustained improvement (+2.67%):** Continued upward trajectory (67.17%), not yet plateaued.
+   - **Insight:** FacLoc responds well to iterative refinement; two-phase local search (facility-closing + client moves) provides steady gains.
+
+### Study 4 Expectations vs Reality
+- **MaxSAT:** Expected ~98.6%, Got 99.31% ✓✓ (exceeded expectation, recovery complete)
+- **FacLoc:** Expected maintenance, Got +2.67% ✓ (better than expected)
+- **LOP:** Expected 9.6%+, Got 5.05% ✗✗✗ (catastrophic, unexpected regression)
+- **QAP:** Expected marginal improvement, Got -0.97% ✗ (continued weakness)
+- **GC:** Expected maintenance, Got -1.54% ✗ (minor regression)
+
 ## Abandoned
 
 *(tried and failed, or logically flawed — why, to avoid re-testing)*
@@ -98,5 +133,6 @@ RED FLAG that you need to given seperate advice for each problem.
 - **Minimal guidance (4-point process):** Study 1 showed Scientists need structure to handle failure modes. No room for reflection, diagnosis, or strategic pivots. Insufficient for harder problems (TSP, QAP).
 - **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver. Study 2 proved explicit diagnosis is required.
 - **Problem-agnostic plateau advice:** Study 2 showed all problems hitting plateaus, but each needs different escape strategy. MaxSAT: neighborhood tweaks. LOP: initialization diversity or timeout mgmt. GC: already optimal locally. One-size guidance creates divergence.
-- **Conditional "skip" instructions in guidance:** Study 3 showed catastrophic failure. Added checkpoint "If you already use 2-opt, skip to initialization diversity" broke MaxSAT by 4.23%. Reason: skipping removes context and examples Scientists need. Conditional branches should ADD guidance, not DELETE sections. **Never use "skip" instructions.**
-- **Vague initialization diversity guidance:** Study 3 created "Initialization diversity & timeout management" section. LOP -0.05%, QAP -1.07% because guidance was conceptual (multi-seed, phase profiling) without concrete next steps. Scientists didn't know how to apply it. Lesson: Examples and concrete variations required, not just concepts.
+- **Conditional "skip" instructions in guidance:** Study 3 CONFIRMED: catastrophic failure (-4.23% MaxSAT). Study 4 CONFIRMED: removing "skip" checkpoint restored MaxSAT to 99.31%. Reason: skipping removes context and examples Scientists need. Conditional branches should ADD guidance, not DELETE sections. **DEFINITIVELY: Never use "skip" instructions.**
+- **Vague initialization diversity guidance:** Study 3 failed (-0.05% LOP, -1.07% QAP). Study 4 showed concrete examples also failed (-4.18% LOP, -0.97% QAP) because guidance re-suggested strategies already exhausted in prior trials. Lesson: Generic "try X" guidance cannot account for problem-specific exploration history. **Problem-specific guidance needed or accept failure on weak problems.**
+- **One-size-fits-all guidance across five problems:** After 4 studies, divergence is now provably fundamental. FacLoc (+67%), MaxSAT (+99%) respond to neighborhood/phase refinement. LOP (-5%), QAP (+12%) need algorithmic redesign (Tabu, SA, ILS). GC (+19%) already locally optimal. **Guidance must either be problem-specific or abandon hope for weak-problem improvements.**

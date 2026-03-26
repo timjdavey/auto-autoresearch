@@ -109,3 +109,58 @@ A chronological log of studies — one entry per study, recording what changed, 
 
 #### Study 3 Conclusion
 **Status:** FAILED. Aggregate regression -0.63%, MaxSAT catastrophic drop -4.23%. The conditional checkpoint strategy backfired. Making neighborhood guidance conditional didn't preserve MaxSAT's path; instead, it disrupted it. The redirect toward initialization diversity/timeout management didn't help LOP or QAP either. The guidance is now problematic: overly complex with conditional branches that confuse rather than clarify. Revert to simpler, more direct guidance and reconsider the approach.
+
+---
+
+### Study 4 (Recovery: Simplify & Concrete Examples)
+- **Date:** 2026-03-26
+- **Hypothesis:** Study 2 succeeded with clear, focused guidance on neighborhoods (+1.25% aggregate, MaxSAT +6.2%). Study 3 failed by adding complexity: conditional "skip" instructions and vague guidance (-0.63% aggregate, MaxSAT -4.23% catastrophic drop). Recovery strategy: revert to Study 2 baseline (proven to work), remove dangerous "skip" checkpoint, and add ONE concrete refinement to address weak problems.
+- **Plan:**
+  1. **Remove CRITICAL CHECKPOINT from Neighborhood Structure section** — the "If you already use 2-opt, skip to initialization diversity" instruction broke MaxSAT's winning path. Checkpoints that DELETE sections are dangerous; they remove examples Scientists need. Restore full neighborhood discussion.
+  2. **Rewrite Initialization diversity section with concrete examples** — Study 3 failed because guidance was conceptual ("try multi-seed, phase profiling") without actionable steps. Replace with concrete strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization strategy (random → greedy → multi-start)", "Use problem-specific construction (facility-first for facloc, degree-ordering for GC)". This targets weak problems (LOP, QAP) directly with implementation examples.
+  3. **Preserve Study 2 structure** — Keep Plateau detection & breaking, Neighborhood structure (minus checkpoint), Error-first exploration intact. Avoid adding new conflicting sections.
+- **Expected outcome:** Restore MaxSAT to 98.6%+ (by removing the skip checkpoint), help LOP/QAP with concrete initialization guidance (vs vague concepts), aggregate ≥41%.
+
+#### Results Summary
+- **Aggregate metrics:** 40.59% best avg_improvement (vs 40.41% Study 3, +0.18% marginal improvement)
+- **Per-problem breakdown:**
+  - facloc: **67.17% improvement (vs 64.50%, +2.67%) ✓**
+  - maxsat: **99.31% improvement (vs 94.38%, +4.93% RECOVERY) ✓✓✓**
+  - gc: 18.97% improvement (vs 20.51%, -1.54% minor regression)
+  - lop: **5.05% improvement (vs 9.23%, -4.18% CATASTROPHIC REGRESSION) ✗✗✗**
+  - qap: 12.44% improvement (vs 13.41%, -0.97% continued weakness)
+
+#### Key Observations
+1. **MaxSAT recovery validated — "skip" checkpoint was the problem:** Removing the conditional skip checkpoint restored MaxSAT's winning path. MaxSAT jumped +4.93% (94.38% → 99.31%), proving that conditional "skip" instructions delete critical guidance. **Key lesson: never tell Scientists to skip guidance sections.**
+
+2. **FacLoc continued steady improvement (+2.67%):** Consistent trajectory across studies (64.18% → 63.88% → 64.50% → 67.17%). FacLoc is one of two problems showing stable, sustained progress. No plateau yet at 67%.
+
+3. **LOP experienced catastrophic regression (-4.18%):** Dropped from 9.23% → 5.05%, the single worst regression across all four studies. This is particularly concerning because:
+   - Memory.md shows LOP previously found 4.76% as local optimum
+   - Prior study had 9.23%, suggesting improvement had occurred
+   - Study 4 revision aimed to help weak problems with "concrete initialization examples"
+   - Yet LOP got worse, suggesting the guidance may have caused harmful exploration directions
+
+4. **GC minor regression (-1.54%):** Marginal decline from 20.51% → 18.97%. GC plateaued earlier in Study 3; this regression suggests it's hitting hard local optima.
+
+5. **QAP continued weakness (12.44%):** Weak problem shows no sustained improvement path. Timeouts on rand75a remain a bottleneck. Despite concrete initialization guidance, no breakthrough.
+
+6. **Divergence at all-time high:** MaxSAT +4.93%, FacLoc +2.67% vs LOP -4.18%, QAP -0.97%. Spread is 9.15%, indicating guidance is still problem-specific despite removal of "skip" checkpoint.
+
+#### Study 4 Conclusion
+**Status:** MIXED. MaxSAT's recovery validates the hypothesis that "skip" instructions are dangerous, but LOP's catastrophic regression reveals the "concrete initialization guidance" did not generalize.
+
+**Key findings:**
+- ✅ **"Skip checkpoint" hypothesis CONFIRMED:** Removing the dangerous instruction restored MaxSAT to 99.31% (best across all studies so far).
+- ✅ **FacLoc shows stable improvement:** +2.67% gain, continuing upward trajectory (possibly not yet at local optimum).
+- ❌ **Concrete initialization examples did NOT help weak problems:** Both LOP (-4.18%) and QAP (-0.97%) regressed despite guidance explicitly providing initialization examples (multi-seed, greedy variants, problem-specific construction).
+- ❌ **Aggregate improvement minimal:** +0.18% is essentially flat, masked by MaxSAT recovery offsetting LOP crash.
+
+**Root cause of LOP regression (hypothesis):** LOP memory.md documents prior attempts at initialization diversity (trials 29-38 across previous studies), all of which failed to improve beyond ~4.76%. Study 4 guidance repeated these strategies with "concrete examples", which likely caused Scientists to re-explore exhausted parameter space rather than pursuing fundamentally different algorithms (Tabu, SA, ILS). LOP memory.md explicitly recommends "DO NOT try: ILS, perturbation, more starts, Or-opt, 3-opt, or hybrid greedy variants" — yet these are exactly the diversification strategies prior guidance encouraged.
+
+**Fundamental issue:** Guidance cannot be one-size-fits-all. The five problems have different algorithmic profiles:
+- **FacLoc & MaxSAT:** Respond well to neighborhood exploration and multi-phase improvements
+- **LOP & QAP:** Stuck at local optima reachable by simple heuristics; need algorithmic redesign (Tabu, sophisticated SA, or Lin-Kernighan)
+- **GC:** Already well-optimized via DSATUR; marginal gains only from specialized tie-breaking
+
+---

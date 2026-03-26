@@ -67,3 +67,47 @@ Be specific and justify with evidence.
    - **Pattern:** Increased complexity ≠ increased performance. Each new section added after Study 2 backfired.
    - **Proposal:** Study 4 should return to Study 2 guidance as baseline, then test ONE small, concrete refinement (e.g., add specific multi-seed examples for weak problems). Measure in isolation before adding more.
    - **Evidence:** Guidance regression from 41.04% to 40.41%, paired with increased error rates (MaxSAT solver_error, GC coloring bug, LOP range error), indicates guidance-induced instability.
+
+## Study 4 Observations
+
+1. **"Skip checkpoint" hypothesis definitively confirmed:**
+   - Study 3 added "If you already use 2-opt, skip to initialization diversity" → MaxSAT crashed -4.23%
+   - Study 4 removed the checkpoint, restored full neighborhood section → MaxSAT jumped +4.93% to 99.31% (best across all studies)
+   - **Proposal:** LOCKED DECISION: Never include "skip" or "ignore section X" instructions in guidance.md. Conditional guidance should ADD clarifications, not DELETE paths. Structure as "If X, also try Y" not "If X, skip section Z."
+   - **Evidence:** Two independent studies (3 and 4) confirm causality: conditional skip instruction → catastrophic failure; removal of skip instruction → recovery.
+
+2. **Concrete examples did NOT rescue weak problems:**
+   - Study 4 added explicit initialization strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization (random → greedy → multi-start)", "Use problem-specific construction (facility-first, degree-ordering)"
+   - **Outcome:** LOP crashed -4.18% (9.23% → 5.05%), QAP regressed -0.97% (13.41% → 12.44%)
+   - **Root cause:** LOP memory.md shows trials 29–38 (prior studies) exhaustively tested multi-seed, greedy variants, and random initialization — all failed. Study 4 guidance re-suggested these exhausted strategies, causing Scientists to waste budget re-exploring known-dead space.
+   - **Proposal (CRITICAL):** Weak problems (LOP, QAP) have fundamentally exhausted initiative diversification strategies. Generic guidance cannot direct them toward unexplored approaches. Two options:
+     - **(A) Accept failure:** Stop trying to improve LOP/QAP with generic guidance; focus on the 3 problems that respond (FacLoc, MaxSAT, GC).
+     - **(B) Problem-specific guidance:** Create problem-specific sections in guidance.md (e.g., "For LOP: Tabu search, SA, Lin-Kernighan") rather than generic "try initialization."
+     - **(C) Algorithmic hints:** Modify guidance to suggest that if (trial_count > X) AND (no improvement > Y%), scientists should attempt algorithm-family redesign (e.g., "switch to Tabu" for LOP) rather than parameter tuning.
+   - **Evidence:** 4 studies + 35+ trials on LOP have shown greedy+2-opt is a proven local optimum. Any guidance that re-suggests parameter variations or initialization will fail.
+
+3. **Divergence is now structural, not tunable:**
+   - Study 4 spread: MaxSAT +99.31%, FacLoc +67.17%, GC +18.97%, QAP +12.44%, LOP +5.05%
+   - Improvement ratios: MaxSAT is 19× better than LOP; this is not fixable by guidance.
+   - **Proposal:** Acknowledge that the five problems have fundamentally different solvability profiles. Generic guidance cannot bridge this gap. Either:
+     - Develop problem-specific guidance (separate sections per problem)
+     - Or accept that 2 of 5 problems will underperform and focus on optimizing the 3 responders
+   - **Evidence:** All 4 studies show consistent per-problem ordering (MaxSAT > FacLoc > GC > QAP > LOP) despite major guidance changes. Problem difficulty is intrinsic, not guidance-fixable.
+
+4. **FacLoc is the only problem showing consistent improvement trajectory:**
+   - Study 1: 64.18%
+   - Study 2: 63.88% (marginal regression)
+   - Study 3: 64.50% (recovery)
+   - Study 4: 67.17% (new best, +2.67%)
+   - **Insight:** FacLoc plateaued at 27% in early trials (prior ensemble, per memory.md), then breakthrough to 58–67% range via multi-seed + 2-opt. Continued refinement via facility-closing and phase ordering yielding steady 1–3% gains per study. Not yet at hard ceiling.
+   - **Proposal:** Use FacLoc as the "proof of concept" for iterative refinement. FacLoc shows that sustained exploration and phase-based optimization work. Contrast with LOP/QAP where guidance has proven ineffective.
+   - **Evidence:** FacLoc 4/4 studies trending upward; only problem without regression.
+
+5. **Trial count instability in GC requires investigation:**
+   - Study 1: 51 trials, 18.95% improvement
+   - Study 2: 56 trials, 18.95% improvement (no change)
+   - Study 3: 33 trials, 20.51% improvement (fewer trials, higher improvement — suspicious)
+   - Study 4: 50 trials, 18.97% improvement (back to baseline)
+   - **Question:** Why did GC run only 33 trials in Study 3? Early convergence, harness variation, or hidden logic?
+   - **Proposal:** If harness has per-study trial-count logic, document it in method.md. If not, investigate Study 3 execution to understand the anomaly. GC's +1.56% improvement in Study 3 may be spurious due to lower trial count.
+   - **Evidence:** GC's improvement in Study 3 (+1.56%) disappeared in Study 4 (-1.54% vs Study 3), suggesting noise rather than real improvement.

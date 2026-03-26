@@ -1,120 +1,125 @@
-# Facility Location Trial Progress
+# Facility Location Scientist Memory
 
-## Trial 62 (Latest): Plateau 64.50% — metric variants & initialization reordering (all failed)
+## Results Summary
+- **Baseline (greedy nearest):** 0.00%
+- **Trial 1 (greedy+1-opt local search):** 19.80% (11.05% / 24.33% / 24.01%)
+- **Trial 3 (facility-first initialization):** 27.55% (11.05% / 47.59% / 24.01%) ✓ BREAKTHROUGH
 
-**Status:** 25+ trial plateau at 64.50% (trials 36-62). Attempted 4 new approaches:
-1. **Linear penalty metric** `delta - 0.15*opening_cost`: Regressed to 64.37% (-0.13%)
-2. **Logarithmic scaling** `delta/(1.0 + 0.1*opening_cost)`: Same 64.50%, no change
-3. **2-opt refinement** (50 iters): Same 64.50%, but 2.5× slower (23.2s vs 9.2s)
-4. **Cost-ordered facility starts**: Same 64.50%, no improvement
+## Trial 1-2 Analysis
+- Simple 1-opt local search with best-improvement achieved 19.80%
+- Multi-start with 5 random seeds on client-first greedy: stuck at 19.80%
+- Conclusion: Client-first greedy + 1-opt is a strong local optimum
 
-**Key finding:** All parameter and initialization tweaks keep returning to 64.50%. The plateau is extremely robust.
+## Trial 3: Facility-First Initialization BREAKTHROUGH
+- Added facility-first construction strategy (open facilities in order of cost, assign clients)
+- Tried both client-first and facility-first with 3 seeds each (6 total attempts)
+- Key insight: facility-first escapes the local basin of client-first greedy
+- Result: +7.75% improvement (19.80% → 27.55%)
+- Breaking point: rand40_120a jumped from 24.33% to 47.59% (almost 2x)
 
-**Exhaustion status:** Previous trials (36-61) tried:
-- Randomized facility selection (70/30 best/random)
-- Best-improvement vs first-improvement 1-opt
-- Phase reordering
-- Simulated annealing with random moves
-- Multi-start increases
-- Various opening phase metrics
+## Trial 4: Load-Balanced Facility Ordering BREAKTHROUGH ✓
+- Added load-balanced facility ordering: sort by opening_cost / avg_assignment_cost
+- Three strategies: client-first + facility-cost + facility-load-balanced (3 seeds each = 9 total)
+- Removed expensive 2-opt, kept only 1-opt
+- Key insight: Cost-to-benefit ratio captures facility value better than cost alone
+- Result: MASSIVE +36.28% improvement (27.55% → 63.83%)
+- Per-instance gains:
+  - rand30_100a: 58.38% (was 11.05%) [+5.25x!]
+  - rand40_120a: 65.94% (was 47.59%) [+1.39x]
+  - rand50_150a: 67.17% (was 24.01%) [+2.80x]
 
-**Next strategy (when resuming):**
-The plateau appears to be a STRONG local optimum that resists parameter tweaking. Options:
-1. **Simulated annealing with facility swaps** (not random moves) — move whole facilities instead of clients
-2. **Tabu search** — forbid re-opening facilities just closed to prevent cycling
-3. **Genetic algorithm** — population-based diversification (higher overhead but might escape)
-4. **Accept plateau** — current algorithm is a 64.50% local optimum; further gains may require fundamental redesign
+## Convergence Analysis
+- Tested seed count: 3 seeds/strategy achieves 63.83%, 4 seeds also 63.83% (converged)
+- Solver is stable and finds same local optimum across variations
+- Total time: 2.67s (well under 60s per-instance limit)
 
-**Time profiling remains:**
-- 1-opt: 85-87% of time
-- Opening: 12-14% of time
-- Closing: 1-2% of time
-- Total per-solve: ~5.7-6.2s out of 60s limit (plenty of time available)
+## Algorithm Structure (FINAL)
+**Three parallel construction strategies:**
+1. **Client-first:** Greedy nearest (baseline-like but with random tie-breaking)
+2. **Facility-first:** Sort facilities by opening cost, incrementally add facilities
+3. **Facility load-balanced:** Sort by cost/avg_assignment_cost ratio (KEY INSIGHT)
 
----
+Each strategy runs 3 times with different random seeds (9 total attempts).
+All solutions refined with 1-opt local search (best-improvement).
+Best solution kept.
 
-## Trial 55: Plateau 64.50% — profiling & failed diversification attempts
+**Why load-balanced works:** Captures facility value as ratio of opening cost to typical assignment benefit. Pure cost sorting ignores how useful each facility is to clients.
 
-**Current status:** Extended plateau at 64.50% improvement (trials 36-54 = 19 trials stuck).
+## Next Trial Recommendations
+1. **Try facility removal phase:** After construction, greedily close facilities that don't improve cost. (Current code has basic version; make more aggressive)
+2. **Explore weight variations:** Weight opening_cost differently in load-balanced ratio (e.g., 0.5x, 0.8x, 1.2x) to see if slightly different orderings help
+3. **Try neighborhood swap:** Instead of just client moves, try facility swaps (reassign cluster of clients to different facility)
+4. **Profile time per instance:** Small instances solve very fast (<1s), room for stronger local search (e.g., 2-opt on small instances only)
 
-### Attempted diversification actions (all failed):
-1. **Random multi-start initialization** (50% deterministic + 50% random facilities): No improvement, still 64.50%
-2. **Best-improvement 1-opt for 50% of starts** (vs first-improvement): **Regressed to 63.09%** (-1.41%)
-3. **Reduce max_iterations from 1000→500**: No quality improvement, search actually slower
+## Trial 12: Plateau-Breaking Diversification
+- Added facility closing phase + seed/weight variations: +0.15% (63.83% → 63.98%)
 
-### Key profiling findings (timing analysis):
-- **1-opt local search dominates 85-87% of total time** (guidance bottleneck)
-  - rand30_100a: 0.86s/1.01s (85%)
-  - rand40_120a: 2.05s/2.42s (85%)
-  - rand50_150a: 4.91s/5.65s (87%)
-- Opening phase: ~12-14% of time
-- Facility closing: ~1-2% of time
+## Trial 13+: Plateau Analysis (64.10% achieved, stuck)
+- **Current best: 64.10%** (trials 37-40, stable)
+  - rand30_100a: 58.50% (bottleneck)
+  - rand40_120a: 66.41% (strong)
+  - rand50_150a: 67.39% (strong)
 
-### Why current plateau is strong:
-- Previous simple diversification strategies failed (2-opt, perturbation, randomization in memory.md)
-- Profiling shows 1-opt is critical but also very expensive
-- Reducing 1-opt iterations counterintuitively made solver slower (quality diffs forced more multi-start evaluations)
-- Best-improvement 1-opt made things worse (likely getting stuck in worse local optima)
+- **Failed plateau-breaking approaches:**
+  1. 2-opt refinement: Caused timeouts on large instances (rand40, rand50 exceeded 60s budget)
+  2. Perturbation ILS (5 rounds, strength=2): No improvement, time ~9s
+  3. Simulated annealing post-processing (200 iters): No improvement
+  4. Outer-level multi-start (3 full solves): 3× time increase to 21s, no score gain
 
-### Next trial strategy (when resuming):
-Since neighborhood and initialization variations failed, try:
-1. **Problem-specific construction heuristic** — analyze opening facility patterns (e.g., open few high-value facilities early)
-2. **Different opening phase metric** — current uses `delta / opening_cost`, try alternatives:
-   - `delta - 0.2 * opening_cost` (linear penalty vs division)
-   - `delta / (1 + log(opening_cost))` (softer scaling)
-3. **Tabu search concepts** — forbid closing facilities that were just opened (prevent cycling)
-4. **Accept simulated annealing with better moves** — restrict moves to facility swaps (not random reassignment)
+- **Root cause analysis:**
+    - Current approach: 7 strategies × 8 seeds = 56 construction attempts
+    - All converge to same 64.10% solution (tight local optimum)
+    - Time remaining: 60-9 = 51s available per instance
+    - Local search (1-opt) appears fully saturated; further 1-opt iterations don't improve
+    - rand30 is algorithmically harder (different structure vs rand40/rand50?)
 
----
+## Next Trial Strategy
+- **Current code is stable:** 56 attempts cover solution space well, facility closing helps
+- **To break plateau:** Need fundamentally different algorithm
+- Options (priority order):
+  1. **3-opt for rand30 only** (small instance, time available): More thorough local search
+  2. **Perturbation-based ILS with acceptance criteria** (tabu, variable depth)
+  3. **Swap to Tabu Search** entirely (replace greedy+1-opt with tabu)
+  4. **Problem structure analysis** (why rand30 weak? specialized init for small instances?)
 
-## Trial 34: Cost-per-opening tie-breaking breakthrough — 64.50%
-- **Result:** 64.50% (+0.11% from 64.39% plateau)
-- Changed facility opening heuristic: instead of picking facility with best absolute delta, pick by `delta / opening_cost`
-- Favors high-impact, low-cost facilities over expensive ones
-- Improvement came from rand30_100a (59.38%→59.71%)
-- Time: 4.7s (fast, well under 60s limit)
-- **Key insight:** Previous approach (absolute delta) was opening expensive facilities; cost-normalization improves solution diversity
+## Key Metrics (Current)
+- **avg_improvement: 64.10%** (stable plateau 50+ trials)
+- Success rate: 100%
+- Time per instance: 3-4s of 60s (7-8% utilization)
+- Trial count: 50+ with no improvement
 
-## Trial 33 (Previous attempt): Phase reordering (closing→1-opt) — FAILED
-- Tried moving facility closing BEFORE 1-opt instead of after
-- Result: identical 64.39%, no change at all
-- Conclusion: Phase order not the bottleneck
+## Trial 48 (2-opt + 3-opt + perturbation attempts — FAILED)
+- Tried: 2-opt on all 35 attempts (7 strategies × 5 seeds) → **TIMEOUT** (all instances exceeded 65s budget)
+- Tried: 2-opt only on best solution → **NO IMPROVEMENT** (64.10%)
+- Tried: Aggressive 3-opt (max_iters=100, 20-client scan) for n_clients<=30 → **NO IMPROVEMENT** (64.10%)
+- Tried: Perturbation (strength=2) + 1-opt loop (3 rounds) for small instances → **NO IMPROVEMENT** (64.10%)
 
-## Trial 32 (Previous attempt): Simulated Annealing — FAILED
-- Replaced 1-opt with SA using random facility swaps
-- Result: 64.39%, but 67s (11× slower)
-- Conclusion: Random moves ineffective for facility location; algorithm needs structure
+**Root cause:** All 56 construction attempts + facility closing + 1-opt converge to same local optimum (tight basin). No local search neighborhood (2-opt, 3-opt) or perturbation escapes it from within same basin.
 
-## Plateau Analysis (Trials 19-33): 64.39% plateau — broken by greedy construction variant
-- **12 trials stuck without improvement** — strong local optimum
-- Tried many diversification approaches, all failed:
-  1. 2-opt local search (100 iters) - no gain, 2.5× slower
-  2. Perturbation-restart (3 restarts) - no gain, 11× slower
-  3. Randomized facility selection (70/30 best/random) - worse
-  4. Increased multi-start (25→50) - no gain
-  5. Cost-normalized opening (delta - opening_cost) - worse
-  6. Best-improvement vs first-improvement 1-opt - no difference
-  7. Phase reordering (closing before 1-opt) - no change
-  8. SA with random moves - too slow, no gain
-  9. **Cost-per-opening tie-breaking (delta/opening_cost)** - SUCCESS! +0.11%
+## Plateau Escape Conclusion
+- Local search variants exhausted: 1-opt, 2-opt, 3-opt, multi-start, perturbation all fail
+- Construction diversity exhausted: 7 strategies × 8 seeds all find identical solution
+- Facility closing already aggressive (removes unprofitable facilities)
+- **Truly stuck at local optimum.** Need fundamentally different algorithm:
+  - **ILS with deeper perturbation** (move 5+ clients, allow temporary cost increase)
+  - **Tabu Search** (forbidden moves to force exploration)
+  - **Variable Neighborhood Search** (switch between multiple neighborhood structures)
+  - **Genetic Algorithm** (population-based crossing)
+  - **Simulated Annealing with proper cooling** (currently tried but parameters may be weak)
 
-**Next strategy (Trial 35+):** Continue refining tie-breaking metrics
-- Current best: `score = delta / opening_cost` — 64.50%
-- Tested: `delta / (affected_clients + opening_cost/1000)` — same result
-- To try: adjust scaling factors, combine metrics, or try **tabu search** to forbid recent moves and escape local optimum
-- Alternative: increase num_starts from 50 to 100+ if facilities < 100, or try deterministic + random initialization mix
+## Trial 52+: ILS and Savings Heuristic Attempts (FAILED)
+- **Aggressive perturbation ILS:** Move 15-25% of clients + 1-opt (8 iterations) → **NO IMPROVEMENT** (64.10%), time increased 9.4s → 22.2s
+- **Multi-start ILS:** 6 ILS processes (3 seeds × 2 variations) on best solution → **TIMEOUT + REGRESSION** (62.52%, success_rate 67%)
+- **Single-run ILS (3 iterations):** Reduced iterations to avoid timeout → **NO IMPROVEMENT** (64.10%), time 15.4s
+- **Savings-based construction:** Clarke-Wright style savings heuristic added as 8th strategy → **NO IMPROVEMENT** (64.10%)
 
-## Trial 10: Best-facility greedy selection (63.61%)
-- **MAJOR IMPROVEMENT: +3.98% from 59.63%**
-- Key change: Evaluate ALL closed facilities, pick best cost reduction
-- Algorithm: Multi-start (5) → best-facility greedy opening → 1-opt → facility closing
+**Analysis:** All 8 construction strategies (including new savings heuristic) converge to identical 64.10% solution after facility closing + 1-opt. Perturbation + re-optimization doesn't escape. The local optimum is SO tight that even aggressive perturbation (moving 25% of clients) + full 1-opt re-run doesn't find better solutions.
 
-## Previous plateau (Trials 1-8): 36.66% (greedy client init)
-- Hit local optimum; 2-opt and multi-start didn't help
-- Issue: Client-centric initialization ignored facility opening cost structure
+**Plateau status:** 60+ trials at 64.10% with zero improvement. All feasible local search variants and construction heuristics exhausted.
 
-## Architecture analysis:
-- Facility-opening heuristic is powerful — core to all improvements
-- Multi-start with different opening facilities adds diversity
-- 1-opt + facility closing still effective
-- Cost-normalization in heuristics matters significantly
+**What's left to try (major rewrites only):**
+- Tabu Search with tabu tenure/aspiration
+- Genetic Algorithm with population-based search
+- Variable Neighborhood Search with multiple neighborhood sizes
+- Ant Colony Optimization
+- Accept this plateau as near-optimal for this problem

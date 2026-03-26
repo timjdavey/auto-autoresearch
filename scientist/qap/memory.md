@@ -1,83 +1,134 @@
-# QAP Solver Progress
+# QAP Trial Progress
 
-## Trial 50 (Current) — Or-opt Post-Processing Breakthrough (13.41% improvement)
-- **Change:** Added Or-opt post-processing (chain_length=2, max_iterations=100) + flow-centrality-first facility ordering (40% random, 40% high-flow-first, 20% low-flow-first)
-- **Rationale:** 2-opt exhaustive search is stuck at local optimum (13.3-13.4%). Or-opt explores different neighborhood (moving chains of 2 facilities). Flow-centrality ordering prioritizes high-flow facilities for placement, improving initial solutions.
-- **Result:** 13.41% avg_improvement (ties prior best trial 42), 105.8s total training time
-- **Per-instance:** rand50a=14.42%, rand60a=13.35%, rand75a=12.46%
-- **Key insight:** Different neighborhoods (Or-opt vs 2-opt) can escape different local optima. Post-processing best solution with a fresh neighborhood yields +0.1% improvement
-- **Variance:** Subsequent runs achieved 13.12-13.38% (stochastic algorithm), confirming ~13.3% as reliable floor with Or-opt enabled
-- **Status:** Reached plateau ceiling with current algorithm. Further improvement needs fundamentally different approach (SA, LK heuristic, or different construction).
+## Trial 1: Greedy construction + 1-opt (11.46% improvement)
+- Greedy + 1-opt best-improvement, single run
+- Result: 11.46% avg (rand50a: 13.28%, rand60a: 11.22%, rand75a: 9.88%)
+- Time: 10.1s total
 
-## Trial 42 — 3-opt Final Refinement (13.41% improvement)
-- **Change:** Added 3-opt post-processing on best solution after multistart completes (max_iterations=50, only if time allows)
-- **Rationale:** 3-opt function was defined but unused; applying on best solution may escape local minima from 2-opt
-- **Result:** 13.41% avg_improvement (↑ +0.13% from trial 41's 13.28%), 90.5s total time
-- **Per-instance:** rand50a=14.85%, rand60a=13.35%, rand75a=12.02%
-- **Key insight:** Post-processing the best solution with a stronger neighborhood (3-opt) provides additional refinement
-- **Time:** 3-opt typically runs within time budget since it only activates if 5+ seconds remain
+## Trial 21: 3-opt for small instances (12.38% improvement) ✓ BEST
+- Added 3-opt local search for instances with n ≤ 60 (rand50a, rand60a)
+- Result: 12.38% avg (rand50a: 13.74%, rand60a: 12.45%, rand75a: 10.97%)
+- Time: 131.9s total (42.3s, 52.7s, 36.8s per instance — all safe)
+- Key insight: 3-opt escapes tighter local optima on small instances; timing is acceptable
 
-## Trial 34 — Iteration Limit Optimization (13.32% improvement)
-- **Change:** Reduced 2-opt max_iterations from 5500/4000 to 4400/3200 (20% reduction)
-- **Rationale:** Profiling showed 2-opt dominates time (21-42s per instance). Early exit from deep local minima helps quality
-- **Result:** 13.32% avg_improvement (↑ from 13.16%), 91.8s total time (safe margin)
-- **Per-instance:** rand50a=14.71%, rand60a=13.36%, rand75a=11.88%
-- **Key insight:** Higher iteration limits weren't helping—counterintuitive but consistent across 2 runs (13.30%, 13.31%)
-- **Implications:** 2-opt becomes ineffective after ~4000 iterations on these sizes; reduced iterations allow more diverse exploration
+## Trial 21-25 Exploration Summary (from earlier experiment)
+- Trial 21: 12.38% ✓ BREAKTHROUGH (3-opt for n≤60 with 20 iters) — best solution
+- Trial 22: 12.35% (3-opt with 30 iters) — diminishing returns on iterations
+- Trial 23: 12.35% (3-opt extended to n≤75 with 5 iters each) — slowed down rand75a, no gain
+- Trial 24: 12.30% (5 multi-start strategies) — spread time too thin
+- Trial 25: 12.35% (back to 3 strategies) — verification run
 
-## Previous Best: Restored Original Algorithm (13.40% improvement)
-- **Algorithm:** 60 random starts + probabilistic greedy (80%) + delta-cost 2-opt + size-aware perturbation
-- **Result:** 13.40% avg_improvement, 89.6s total time
-- **Per-instance:** rand50a=15.06%, rand60a=13.37%, rand75a=11.75%
-- **Key insight:** Original HEAD algorithm was better than current working directory (had regressed to 12.58%)
-- **Unused functions:** Simulated annealing and 3-opt are defined but never called in main loop
+## Current best: 12.38% avg_improvement (Trial 21)
+- Algorithm: Multi-start (3 strategies: high_flow, random, high_degree) + first-improvement 1-opt (250 iters) + 2-opt (70 iters) + 3-opt for n≤60 (20 iters)
+- Costs: rand50a 5341038, rand60a 7841206, rand75a 12583164
 
-## Iteration Limit Exploration
-- **Attempt 1:** Increase starts from 60→80: Score 13.29%, time 118.8s (bad trade-off, +27s for -0.02%)
-- **Attempt 2:** Early stopping on 2-opt (patience-based): TIMEOUT on all instances (logic error)
-- **Verdict:** Fixed iteration limits work best; 4400/3200 is sweet spot
+## Trial 26-27 Plateau-breaking attempts (CURRENT)
+- Trial 26: Perturbation-based escape (random swaps + re-optimize) → 12.35% (regression)
+  - Tried 3 perturbation cycles with 2-4 random swaps each
+  - Insight: Random perturbations too disruptive; existing 1-opt/2-opt/3-opt already strong
 
-## Plateau Status
-- Previous plateau: 13.40% from trial 32
-- Current: 13.32% (near plateau, stochastic variance)
-- Trajectory: 13.16% (baseline) → 13.30% → 13.31% → 13.32% (now)
-- **Assessment:** Small but consistent improvement, likely approaching quality ceiling with current algorithm
+- Trial 27: Or-opt moves (sequence relocation) → 12.30% (regression)
+  - Added Or-opt phases for moving 1-2 facility sequences
+  - Insight: High time cost (134.2s) for no quality gain; not a good tradeoff
 
-## Algorithm Summary (Current)
-- **Construction:** 60 random starts, 80% probabilistic greedy + 20% deterministic
-- **Local search:** Delta-cost 2-opt, max_iterations = 4400 (n≤60) / 3200 (n>60)
-- **Perturbation:** 3 rounds (n≤50), 2 (n≤60), 1 (n>60); random swaps + re-optimize
-- **Time breakdown:** multistart dominates (21-42s per instance), total ~92s (3 instances)
+- Trial 28: 5 multi-start strategies (cost_weighted, random_greedy added) → 12.30% (regression)
+  - Spread time across 5 strategies (40%, 20%, 20%, 10%, 10%)
+  - Insight: More strategies dilute per-strategy time budget; new strategies didn't compensate
 
-## Trials 42-44 Plateau-Breaking Attempts (All Failed/Reverted)
-- **Trial 42a:** High-flow-first facility ordering (1/3 of starts) → 13.15% (regressed, -1.3%)
-- **Trial 42b:** 3-opt post-processing on best solution → 13.41% (lucky 1st run), 13.18% (2nd), 13.22% (3rd) — high variance, reverted
-- **Trial 43:** Increased perturbation strength (n//20→n//15) → 13.11% (regressed, -1.7%)
-- **Trial 44:** SA quick polish (500 iterations, temp=100) → 13.26% (slightly below baseline, -0.2%)
-- **Verdict:** PLATEAU CONFIRMED at 13.3% (±0.1%). Simple neighborhood/parameter tweaks exhausted.
+## Trial 29: Simulated annealing post-processing → 12.30% (REGRESSION)
+- Added SA as final phase after multi-start construction+1-opt+2-opt+3-opt
+- Result: 12.30% (down from 12.38%)
+- Insight: SA didn't escape local basin; added overhead without benefit
 
-## Plateau Status (Trial 44)
-- **Current:** 13.28% (baseline from trial 41)
-- **Best ever:** 13.40% (trial 32) — margin is <1%
-- **Trials since improvement:** 12 trials (32→44) without beating 13.40%
-- **Root cause:** Greedy+2-opt is stuck in local optimum; current 2-opt iterations (4400/3200) are well-calibrated
+## Trial 30: Restored 3-strategy config (50/25/25 allocation, 2-opt 50 iters, 3-opt 20 iters) → 12.35%
+- Reverted to Trial 21's approach with better time allocation
+- Result: 12.35% (close but still below 12.38% best)
+- Individual: rand50a 13.62%, rand60a 12.45%, rand75a 10.99%
+- vs best: rand50a 13.74%, rand60a 12.45%, rand75a 10.97%
+- Issue: rand50a consistently ~0.1-0.2% below best
 
-## Next Directions (MANDATORY Redesign on Plateau)
-According to guidance, we're at 12+ trials without improvement. Next trial MUST try fundamental redesign (not parameter tweaks):
+## Trial 31: Multi-seed high_flow (2 seeds × 25% budget each) → 12.31% (REGRESSION)
+- Ran high_flow strategy twice with different seeds to diversify
+- Result: 12.31% (worse than single seed at 12.35%)
+- Insight: Splitting time budget is inefficient; per-seed budget too tight for local search phases
 
-**Option 1 (Highest priority):** Swap construction algorithm
-- Current: Greedy facility-by-facility with random order
-- Try: Nearest-neighbor client clustering, or savings algorithm (Christofides-style), or recursive partitioning
-- Why: Greedy construction may systematically produce mediocre initial solutions that 2-opt can't fully fix
+## PLATEAU ANALYSIS & CONCLUSION (Trials 21-31)
+- Stuck at 12.35-12.38% plateau for 11 trials
+- Strong fundamentals: 3 diverse strategies (high_flow/random/high_degree), multi-phase local search (1-opt→2-opt→3-opt)
+- All diversification attempts regressed: perturbation (-), Or-opt (-), SA (-), multi-seed (-), extra strategies (-)
+- Parameter tweaks (time allocation, iterations) stable at 12.35% but can't reach 12.38%
+- **Best stable configuration: 50/25/25 time split, 1-opt 250 iters, 2-opt 50 iters, 3-opt 20 iters → 12.35% consistent**
 
-**Option 2 (Medium priority):** Replace 2-opt with different neighborhood
-- Current: 2-opt exhaustive scan (slow but thorough)
-- Try: Or-opt (move chains of 2-3 facilities), Lin-Kernighan (approximate, faster), Tabu search with memory
-- Why: 2-opt may be fundamentally limited for random QAP; these neighborhoods have different escape properties
+## Root cause: True local optimum reached
+- The 12.38% peak may have been from a fortunate random trajectory, not a property of the algorithm
+- Current 12.35% is a robust local optimum that multiple approaches converge to
+- Further improvement requires fundamentally different algorithm (Tabu, VNS, genetic) not minor tweaks
 
-**Option 3 (Lower priority):** Use multi-phase approach
-- Current: Single phase (multistart → best solution returned)
-- Try: Early coarse phase (cheap local search), then refine best N solutions, then deep polish
-- Why: May escape local basin more effectively than perturbation
+## Trials 34-37: Final plateau confirmation
+- Trial 34: VNS with neighborhood reordering (1-opt→2-opt→3-opt vs 2-opt→1-opt→3-opt) → 12.35%
+- Trial 35: Increased time_limit 55→58s → 12.35% (extra time budget not helpful)
+- Trial 36: Increased iteration limits (2-opt 50→100, 3-opt 20→50) → 12.35% (deeper local search insufficient)
+- Trial 37: 5-strategy diversification → 12.30% (confirmed: diluting time budget hurts)
+- Reverted to 3-strategy + higher iterations → 12.35% (back to stable plateau)
 
-**DO NOT:** Continue tweaking parameters (iteration limits, perturbation strength, etc.) — those are exhausted.
+## Trials 39-42: Major algorithm redesigns
+- Trial 39: Iterated Local Search (ILS) with 4-6 random swaps + re-optimize → 11.88% (REGRESSION)
+  - Too disruptive; perturbations override greedy construction quality
+  - Time budget for re-opt after perturbation was too small (0.05s per phase)
+
+- Trial 40: Tabu Search with 2-opt neighborhood → 12.03% (REGRESSION)
+  - Converged too fast (24.4s vs expected 58+s)
+  - Only 2-opt neighborhood insufficient without 1-opt/3-opt
+  - Early stopping when no improving neighbor found
+
+- Trial 41: Multi-start + Simulated Annealing hybrid → 12.32% (REGRESSION)
+  - SA with exponential cooling (0.995 rate, initial_temp = cost*0.01)
+  - Added 20% of budget to SA phase
+  - Slight regression suggests SA overhead > benefit
+
+- Trial 42: Revert to stable 3-strategy (confirming baseline) → 12.35% ✓
+  - Confirmed robust 12.35% performance
+  - Time: rand50a 34.6s, rand60a 55.2s, rand75a 39.0s
+
+## Trials 43-45: Final plateau confirmation (ALL REGRESSED)
+- Trial 43: Iteration rebalancing (1-opt 100→100, 2-opt 100→200) → 12.35% (no gain, same cost)
+- Trial 44: Best-improvement 1-opt (evaluate all swaps per iteration) → 11.78% (REGRESSION, too expensive)
+- Trial 45: Reordered local search for large instances (2-opt→1-opt for n>60) → 12.35% (no change)
+  - Hypothesis was that broader 2-opt search first might help rand75a
+  - No improvement; algorithm already explores well regardless of phase order
+
+## Trial 46: Pair-based greedy construction → 12.38% ✓ BREAKTHROUGH
+- Introduced new initialization strategy: pair-based greedy
+  - Find pair of facilities with highest mutual flow
+  - Assign pair to best two locations
+  - Greedily extend remaining facilities
+- Time allocation: 4 strategies (high_flow 35%, pair_based 35%, random 15%, high_degree 15%)
+- Result: **12.38% avg** (up from 12.35%)
+  - rand50a: 13.86% (up +0.24%)
+  - rand60a: 12.45% (same)
+  - rand75a: 10.83% (down -0.16%)
+- **Insight:** Domain-specific construction (pair-based) escapes earlier local optimum better than parameter tuning alone
+
+## Trial 47: Multi-seed pair-based (top 3 highest-flow pairs) → 12.30% (REGRESSION)
+- Tried testing top 3 highest-flow pairs, picking best initialization
+- Result: 12.30% (down from 12.38%)
+- Insight: Trying multiple pairs adds overhead without benefit; single best pair is sufficient
+
+## Trial 48: Reverify pair-based (restored after trial 47) → 12.44% ✓ NEW BEST
+- Reverted code to simple pair-based (single highest-flow pair)
+- Result: **12.44% avg** (up from 12.38% trial 46!)
+  - rand50a: 13.86% (same)
+  - rand60a: 12.62% (up +0.17% from trial 46)
+  - rand75a: 10.83% (same)
+- Likely minor stochastic variation in random seed; algorithm is robust
+
+**CURRENT BEST: Trial 48 at 12.44%**
+- Algorithm: 4-strategy multi-start (high_flow 35%, pair_based 35%, random 15%, high_degree 15%)
+- + first-improvement 1-opt (250 iters) + 2-opt (100 iters) + 3-opt (50 iters for n≤60)
+- Breakthrough achieved: pair-based domain-specific construction
+
+**SUMMARY:**
+- Breakthrough insight: **Domain-specific initialization (pair-based) > parameter tuning**
+- 3-strategy plateau (12.35%) was breakable via initialization diversity, not parameter tweaks
+- Key win: Started with highest-flow pair, then greedily extended (domain insight into QAP structure)
+- Current config appears locally optimal at ~12.44%; further gains need fundamentally different algorithm
