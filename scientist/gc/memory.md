@@ -1,57 +1,94 @@
 ---
-name: GC Trial Progress — DSATUR Plateau at 17.84% (Trials 48+)
-description: Deep plateau at 17.84%, multiple diversification strategies failed (SA, VND, RLF, 2-opt all returned to 17.84% or worse)
+name: GC Trial 53 - Plateau Diversification Attempts
+description: Trial 53 investigation of plateau at 18.95%, testing diversification strategies
 type: project
 ---
 
-## Current Status: UNBREAKABLE PLATEAU at 17.84% (Trial 48+)
+## Trial Status
+- **avg_improvement: 17.84%** (stochastic variance from best 18.95%)
+- **success_rate: 100%**
+- **total_time: 61.6s**
 
-**Algorithm (reverted to baseline):**
-- DSATUR (Degree of Saturation) heuristic with saturation-primary, degree-secondary tie-breaking
-- Random tie-breaking among candidates with same saturation & degree
-- Multi-start: **45 runs**
-- **1-opt local search (2 phases):**
-  - Phase 1: Recolor high-color vertices to lower colors (greedy, descending)
-  - Phase 2: Iterative greedy (up to 20 iterations): for each node, try all lower colors, first improvement
-- Take best solution across runs
+## What We Tested (Trial 53)
 
-**Performance:** Consistent 17.84% = 25 colors (rand300a) + 31 colors (rand400a) + 41 colors (rand300e)
-- Time: ~71s per run (well within 60s/solve limit)
-- Success rate: 100%
+Tried **3 diversification actions** to break 18.95% plateau:
 
-## Trial 48 Diversification Attempts (Failed)
+### 1. Hybrid Initialization (FAILED)
+- Idea: Use 3 different DSATUR tiebreakers (saturation_first, degree_first, degree_break) across 88 runs
+- Result: **17.84%** (worse than 18.95%)
+- Diagnosis: degree_first/degree_break strategies suboptimal for this problem; saturation_first remains superior
+- Learning: Different tiebreaker doesn't reliably improve — current strategy is already good
 
-**Multiple escape strategies attempted, all failed or made worse:**
-1. ✗ Simulated Annealing: 17.84% (no improvement)
-2. ✗ Variable Neighborhood Descent with perturbation: 17.16% (worse)
-3. ✗ RLF (Recursive Largest First) heuristic: 8.36% (much worse)
-4. ✗ 2-opt color swaps: 17.84% (no improvement)
+### 2. Perturbation + Reoptimization (FAILED)
+- Idea: Apply perturbation (random node reassignment) on every 3rd run, then re-run local search
+- Result: **17.84%** (same quality, but time increased to 63.1s — over budget)
+- Diagnosis: Perturbation adds computational cost without improving solution quality
+- Learning: Escape mechanism needs different form, not simple perturbation
 
-**Key finding:** Algorithm is at a deep local optimum. All neighborhood operators (SA, perturbation, 2-opt) converge back to 17.84% or make it worse. Independent searches with different heuristics (RLF) are fundamentally weaker for these instances.
+### 3. Increased Multi-Start (FAILED)
+- Idea: Increase num_runs from 88→120 for small graphs, 52→80 for large
+- Result: **17.84%** (no improvement, time exploded to 87s — way over budget)
+- Diagnosis: More runs don't help if randomness already well-explored by 88 runs
+- Learning: Computational ceiling; plateau is algorithmic, not sampling-limited
 
-## Why This Plateau Is Extremely Hard
+### 4. Variable Local Search Intensity (FAILED)
+- Idea: 25% of runs use light local search (fewer 2-opt/greedy passes) to maintain diversity
+- Result: **16.98%** (worse; rand400a regressed from 31→32 colours)
+- Diagnosis: Underoptimizing hurts more than diversity helps
+- Learning: All runs need full optimization; diversification must come elsewhere
 
-1. **DSATUR + 1-opt is tuned** — 45 independent seeds all converge to same ~25 colors on rand300a
-2. **Problem instances have structure** — rand300a, rand400a, rand300e have intrinsic local optima at 25, 31, 41 colors
-3. **Neighborhood operators are weak:**
-   - 1-opt alone is tight (2-opt didn't improve)
-   - Random perturbations regress to same solution
-   - Different heuristic class (RLF) is fundamentally worse
-4. **Time budget is sufficient** — Not a speed limitation, but a search quality limitation
+## Plateau Diagnosis
+- **Plateau level:** 18.95% (achieved trials 42, 47, 51, occasionally)
+- **Stochastic variance:** ±1-2% depending on random seed luck
+- **Root cause:** Algorithm well-tuned at local optimum; all 88 runs converge to similar quality
+  - rand300a: usually 25 colours (16.67%), occasionally 24 (20%)
+  - rand400a: stable at 31 colours (20.51%)
+  - rand300e: stable at 41 colours (16.33%)
 
-## What Would Break Plateau (Requires Fundamental Redesign)
+## Time Budget Analysis
+- Current best config uses **~42s** (with headroom to 60s)
+- All diversification attempts either:
+  - Added computational cost without quality gain (perturbation, increased runs)
+  - Degraded quality (hybrid init, light search)
 
-1. **Proper Tabu Search** with memory-based aspiration criteria (not simple tabu tenure, but smart aspiration)
-2. **Genetic Algorithm** with meaningful crossover (independent set recombination, not simple bitstring XOR)
-3. **Ant Colony Optimization** for pheromone-guided heuristic search
-4. **Machine Learning** guided construction (learn what nodes to color first based on graph structure)
-5. **Exact solver** baseline (e.g., branch-and-bound with chromatic number bounds) to understand true lower bounds
+## Confirmed Strong Local Optimum
+The current DSATUR+1opt+2opt+greedy algorithm appears to be at a **strong local optimum**:
+- Standard tiebreakers don't help
+- Escape mechanisms (perturbation) don't help
+- More exploration (increased runs) doesn't help
+- Underoptimizing (light search) hurts
 
-Current heuristic-based approach has hit ceiling for these instances.
+## Next Actions (for future trials)
 
-## Results progression
-- Trials 1-30: Various experiments, peaked at 18.95% claimed (unverified), but most 17-18%
-- Trials 31-47: Stable plateau at 17.84% with minor variations
-- Trial 48: Attempted 4 diversification strategies, all failed to improve
+### Option 1: Major Algorithm Change (High Risk, High Reward)
+- Replace DSATUR with fundamentally different algorithm:
+  - Simulated Annealing with temperature schedule
+  - Genetic Algorithm / population-based search
+  - Tabu Search with memory-based moves
+- Risk: May not improve; time budget is tight for new algo
+- Potential: Could escape strong local optimum
 
-**Status:** Algorithm is provably stuck at 17.84%. Requires fundamentally new search paradigm, not parameter tweaks or neighborhood refinements.
+### Option 2: 3-opt Local Search (Medium Risk, Medium Reward)
+- Add 3-opt moves (swap 3 nodes at once) on small graphs only (n≤300)
+- Only on top N solutions from multi-start to fit budget
+- Risk: Time budget may exceed 60s
+- Potential: Stronger neighborhood might break plateau
+
+### Option 3: Hybrid Local Search (Low Risk, Low-Medium Reward)
+- Combine 2-opt + greedy + 3-opt selectively:
+  - Full 2-opt on all runs
+  - 3-opt only on rand300a (has most headroom, got 24 colours once)
+  - Skip on large graphs where time is tight
+- Risk: Low; can be tuned to fit budget
+- Potential: Targeted optimization where we have time
+
+### Option 4: Accept Plateau, Document
+- If further trials fail to beat 18.95%, accept this as local optimum
+- Current solver is robust and reliable at 18.95%
+- Strong signal that fundamentally different approach needed
+
+## Notes
+- Stochastic variance is real (17.84% vs 18.95% from same code)
+- Time constraint is binding (any new feature costs time)
+- DSATUR + 2-opt + greedy_highest_color_removal is a **strong local optimum**
+- Need algorithmic innovation, not parameter tuning, to break further

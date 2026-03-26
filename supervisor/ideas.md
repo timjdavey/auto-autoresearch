@@ -5,21 +5,35 @@ DO NOT include (or consider) any problem specific ideas.
 RED FLAG that you need to given seperate advice for each problem.
 
 
-## Prioritized for Study 2
+## Study 2 Results — COMPLETED
 
-*(insights from Study 1 baseline that should shape next refinement)*
+**Outcome:** Mixed. Aggregate +1.25%, but divergence revealed: MaxSAT +6%, LOP -0.34%, GC/FacLoc flat.
 
-1. **Plateau-breaking diversification:** Study 1 showed all problems hitting plateaus by trial ~10–20. Guidance mentions diversification but Scientists didn't aggressively pursue it. Consider:
-   - Explicit "restart with new seed + parameter variation" suggestion after plateau detected
-   - Concrete examples of what to try (2-opt for 1-opt solvers, different tie-breaking, multi-phase approaches)
+### 1. Neighborhood Structure guidance — PARTIALLY SUCCESSFUL, now problem-specific
+   - **What worked:** MaxSAT breakthrough (+6.2%) using aggressive 2-opt/1-opt combinations. Guidance on "when to use 2-opt vs 1-opt" energized exploration in a problem without pre-existing neighborhoods.
+   - **What failed:** LOP regression (-0.34%). Scientists already using 2-opt/3-opt (evident in train.py) tried parameter tuning instead of algorithmic redesign. Guidance created negative feedback: "try 2-opt variants" → already have it → adjust iters → worse results.
+   - **Root cause:** Guidance was too generic. MaxSAT benefited; LOP was harmed because it wasted budget on incremental parameter tweaks within an already-explored design space.
+   - **Action for Study 3:** Refactor "Neighborhood Structure" section:
+     - Add checkpoint: "Check if 2-opt is already in your code. If yes, skip the '2-opt vs 1-opt' suggestion."
+     - Target advice: "1-opt only" → explain 2-opt as escape. "Already using 2-opt" → focus on initialization diversity, simulated annealing, or timeout management.
+     - Keep MaxSAT-style guidance but make it conditional.
 
-2. **Weak-problem support:** QAP (13.8%) and LOP (9.6%) vastly underperform facloc (64%) and maxsat (92%). This may be:
-   - Solver design gaps (missing key neighborhoods like 2-opt, 3-opt)
-   - Time budget misalignment (lop had timeouts on large instances)
-   - Algorithm-problem fit issues (greedy + 1-opt may be insufficient for these structures)
-   - Action: Post-Study 1, diagnose QAP and LOP failures in detail before widening guidance changes.
+### 2. Weak-problem support — PARTIALLY ADDRESSED
+   - **QAP (13.8% → 14.48%):** Marginal +0.65%. Still has 10+ timeouts on rand75a. Time budget is bottleneck, not algorithm diversity.
+   - **LOP (9.6% → 9.28%):** Regression. Guidance backfired.
+   - **Insight:** Weak problems need different help. Time profiling (Study 1) worked better than neighborhood tweaks. For Study 3, emphasize timeout diagnosis + algorithm selection rather than parameter variations.
 
-3. **Early error handling proved robust:** GC timeout at trial 10, LOP timeouts at trials 2/7 were logged cleanly and didn't crash studies. Error-first protocol in guidance is working; consider highlighting success in ideas.
+### 3. Guidance quality signal — SUCCESS
+   - GC/FacLoc flat (19% and 64%): no regression, just no improvement. They're already optimized locally.
+   - All problems executed cleanly with reasonable trial counts. Harness and error handling working well.
+
+## Prioritized for Study 3
+
+1. **Refactor "Neighborhood Structure" guidance to be problem-adaptive:** Make it conditional on current solver state (does it already use 2-opt?). Guide toward domain-specific insight rather than generic parameter tuning.
+
+2. **Redirect weak-problem guidance:** Instead of "try 2-opt", emphasize "profile time spent in each phase, then swap the bottleneck phase for a faster algorithm." This worked in Study 1 for diagnosis; make it more prescriptive.
+
+3. **Preserve MaxSAT's energy:** The local search neighborhood guidance was gold for MaxSAT. Keep it, but guard against negative feedback in already-optimized problems.
 
 ## Untested ideas
 
@@ -52,22 +66,23 @@ RED FLAG that you need to given seperate advice for each problem.
 ## Proven strategies
 
 *(what reliably works, and why)*
-- **Multi-start heuristic initialization:** Graph Colouring's multi-start DSATUR (12 high-degree + 12 random starting points) reliably improved solutions. Generalizable: starting point diversity matters.
+- **Multi-start heuristic initialization:** Graph Colouring's multi-start DSATUR (12 high-degree + 12 random starting points) reliably improved solutions. Generalizable: starting point diversity matters. GC maintained 19% across studies = proof of stability.
 - **Local search with max-iteration guards:** Graph Colouring's reduce_colors() with iteration limits (passes < 3) avoids computational blow-up. Key: bounded loops prevent timeouts.
-- **Failure diagnosis + time profiling:** Study 2 showed this transforms problem-solving: explicit diagnosis of timeouts and errors led to 80-100× improvements in QAP/TSP per-trial efficiency. Scientists didn't just retry — they fundamentally redesigned solvers based on understanding root causes.
-- **Asymptotic complexity awareness:** When Scientists understood O(n^k) bottlenecks via time profiling, they swapped to better algorithms (TSP: added Held-Karp for small n, adaptive k-neighbors, Numba JIT). Key: "what's consuming the budget?" guidance surfaces the right optimization target.
+- **Failure diagnosis + time profiling:** Study 1 profiling ("which phase dominates?") helped identify bottlenecks. Study 2 showed this is more effective than blind parameter tweaking. When scientists understand timing, they make better algorithm choices.
+- **Asymptotic complexity awareness:** When Scientists understood O(n^k) bottlenecks via time profiling, they swapped to better algorithms. Key: "what's consuming the budget?" guidance surfaces the right optimization target.
+- **Conditional local search guidance:** MaxSAT +6% via "try 2-opt vs 1-opt" guidance. Works when the solver doesn't already use advanced neighborhoods. Generalizable: check current solver state before suggesting variant neighborhoods.
 
 ## Promising
 
 *(showed potential, needs refinement — what to tweak)*
-- **Edge case detection for error modes:** TSP still has 22% error rate (solver_error + timeouts). Investigate what specific situations trigger these: is it a particular instance size, solver phase, or random seed issue? Scientists may need guidance on detecting and isolating non-deterministic failures.
-- **Solver stability across instance scales:** TSP training time is 151s (vs 53s for QAP, 33s for Graph Colouring). The solver works but is expensive. Future guidance could nudge toward per-instance scaling (e.g., "what algorithm choices differ for n=300 vs n=750?")
-- **Multi-algorithm portfolios:** TSP's final solver uses Held-Karp + ILS + 2-opt + or-opt + SA. This works but is complex. Could guidance help Scientists systematically measure which components contribute value vs complexity?
+- **Timeout diagnostics for weak problems:** QAP and LOP both show persistent timeouts (10+ per study). Instead of "try more neighborhoods", better guidance: "isolate which instance size (50/60/75 for QAP, 75/100/125 for LOP) times out, then reduce algorithm complexity only for that size." Conditional adaptation may unlock improvements.
+- **Problem-adaptive guidance variants:** Study 2 showed one-size-fits-all guidance creates divergence. MaxSAT thrived with neighborhood guidance; LOP was harmed. Consider guidance that branches on observable solver state (already using 2-opt? already multi-start? which errors?).
+- **Initialization diversity without neighborhood tweaks:** LOP improved best via "multi-seed diversification" in prior studies, not via additional neighborhoods. May be a signal: when stuck, try more starting points before trying more complex neighborhoods.
 
 ## Abandoned
 
 *(tried and failed, or logically flawed — why, to avoid re-testing)*
+- **Generic "try 2-opt" guidance for all problems:** Study 2 showed this backfires for problems already using neighborhoods. LOP regressed -0.34% when guidance encouraged 2-opt parameter tweaks (already present, parameter variations didn't help). Action: Make neighborhood suggestions conditional on solver state.
 - **Minimal guidance (4-point process):** Study 1 showed Scientists need structure to handle failure modes. No room for reflection, diagnosis, or strategic pivots. Insufficient for harder problems (TSP, QAP).
 - **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver. Study 2 proved explicit diagnosis is required.
-- **Graph Colouring expansion to 2/3-color reduction:** Study 2 shows Graph Colouring efficiency per trial regressed slightly (0.00258 vs 0.00315), suggesting the Scientist may have overfit on complexity. Keep guidance focused on simplicity for this problem.
-- **Unfocused solver expansion (TSP):** TSP is now very complex (Held-Karp + ILS + 2-opt + or-opt + SA + Numba JIT). It works but at high training cost (151s). Future guidance should avoid "add more algorithms" and instead focus on "measure contribution of each component."
+- **Problem-agnostic plateau advice:** Study 2 showed all problems hitting plateaus, but each needs different escape strategy. MaxSAT: neighborhood tweaks. LOP: initialization diversity or timeout mgmt. GC: already optimal locally. One-size guidance creates divergence.

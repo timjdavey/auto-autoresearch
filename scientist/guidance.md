@@ -43,13 +43,55 @@ You have a **hard turn limit** enforced by the harness. When you hit it, the pro
 **Recognizing a plateau:** After ~10 trials without a new best solution, you've hit a local optimum. This is a CRITICAL signal. Continuing the same approach wastes trials.
 
 **MANDATORY action on plateau detection:**
-When plateau ≥ 10 trials, you MUST take a diversification action in the very next trial. This is non-negotiable. Your choices (in order of effort):
-1. **Restart diversification (easiest):** Change random seed, re-initialize solver state, or swap algorithm parameters. This costs 1 trial, forces a different path.
-2. **Algorithm variant:** If current solver has components (e.g., multiple local search neighborhoods), swap to one you haven't tested. Different heuristic = different starting basin.
-3. **Root cause profiling:** Where is time spent in your current best solver? Can you replace the bottleneck phase with a faster algorithm?
-4. **Major redesign:** Only if 1-3 fail multiple times. Consider fundamentally different approach (different heuristic class, search paradigm).
+When plateau ≥ 10 trials, you MUST take a diversification action in the very next trial. This is non-negotiable. Your choices (in order of effort and novelty):
 
-Do NOT ignore plateaus and hope for breakthrough — they don't happen by accident. Do NOT repeat the same code change hoping it improves next time — it won't.
+1. **Restart diversification (easiest, 1 trial):**
+   - Change random seed + re-initialize solver state from scratch
+   - Swap initialization strategy (random vs greedy vs multi-start)
+   - Adjust algorithm parameters (e.g., temperature in simulated annealing, mutation rate, neighborhood size)
+   - Example: "if using single-seed greedy init, try 5 random restarts with different seeds"
+
+2. **Neighborhood variant (medium effort, 1-2 trials):**
+   - If you have 1-opt local search, try 2-opt (explores more configurations)
+   - If you have greedy construction, try a different tiebreaker (e.g., "best marginal gain" → "first improvement")
+   - If you have one neighborhood, run multiple simultaneously and pick best result
+   - Example: "prior solver uses 1-opt only; add 2-opt moves for a few iterations on top, measure impact vs cost"
+   - **Key:** measure before/after. If 2-opt costs 40% more time but gains 1%, it's not worth it. If it gains 5%, it is.
+
+3. **Root cause profiling (2-3 trials):**
+   - Use `memory.md` to record per-phase timing: initialization, construction, local search, restart
+   - Which phase takes 60%+ of budget? That's your optimization target.
+   - Swap that phase with a faster algorithm or reduce its iterations
+   - Example: "local search dominates (80% of time); replace with faster 1-opt variant or limit to fewer iterations"
+
+4. **Major redesign (only after 1-3 fail):**
+   - Consider fundamentally different algorithm (e.g., switch from greedy+1-opt to simulated annealing, or add 3-opt if stuck in tight local optima)
+   - Only pursue if profiling reveals the current approach is algorithmically limited, not just parametrically weak
+
+**Do NOT ignore plateaus** — they don't break by accident. **Do NOT repeat the same change** hoping it improves next time — it won't.
+
+## Neighborhood structure — local search variants
+
+Local search is a powerful way to escape plateaus. Understanding what "neighborhoods" mean helps you vary your solver intelligently.
+
+**Common neighborhoods (in increasing complexity):**
+- **1-opt (swap):** Change one element at a time. Fast, finds nearby improvements, weak on hard problems.
+- **2-opt (swap pairs):** Change two elements together, often reordering or reconnecting. Stronger than 1-opt, ~4-8× slower.
+- **3-opt (swap triples):** Even stronger but expensive (20–40× slower). Only use on small instances or if 2-opt plateaus.
+- **Greedy variants:** Different tie-breaking rules in construction phase (best marginal gain vs first-fit vs most-constrained).
+- **Multi-start:** Run construction multiple times from different random seeds, keep the best result.
+
+**How to measure neighborhood impact:**
+1. Time the baseline solver end-to-end.
+2. Add a neighborhood variant (e.g., add 2-opt on top of 1-opt).
+3. Measure new end-to-end time and solution quality.
+4. If quality improves by >5% for ≤20% extra time, it's worth keeping.
+5. Record the trial result and time breakdown in `memory.md`.
+
+**When to use which:**
+- **Stuck early (trial <10)?** Time budget may be insufficient. Reduce iterations of heavy phases, or profile to find bottlenecks.
+- **Stuck mid-plateau (trial 10-30)?** Try 2-opt or multi-start restarts to escape the local basin.
+- **Stuck late (trial 40+)?** If profiling shows time available, try 3-opt on small instances only; otherwise accept local optimum or redesign.
 
 **Error-first exploration — MANDATORY PROTOCOL**
 
