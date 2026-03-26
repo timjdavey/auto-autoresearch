@@ -44,7 +44,7 @@ SCIENTIST_TOOLS = "Read,Edit,Write"
 
 # Supervisor
 SUPERVISOR_MODEL = "opus"
-DEFAULT_STUDIES = 20
+SUPERVISOR_STUDIES = 20
 SUPERVISOR_TOOLS = "Read,Edit,Write"
 SUPERVISOR_PRE_PROMPT = "Read and follow supervisor/method.md — PRE-STUDY phase only."
 SUPERVISOR_POST_PROMPT = "Read and follow supervisor/method.md — POST-STUDY phase only."
