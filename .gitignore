@@ -16,7 +16,6 @@ queue/
 
 # Agent prompt files (generated per-session by launchers)
 .claude
-CLAUDE.md
 AGENTS.md
 .conductor
 

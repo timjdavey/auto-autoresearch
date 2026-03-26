@@ -43,9 +43,9 @@ DEFAULT_STUDY_TIMEOUT = 36_000  # 10 hours per study
 # Scientist
 SCIENTIST_MODEL = "haiku"
 SCIENTIST_TRIALS = 10
-SCIENTIST_MAX_TURNS = 25
+SCIENTIST_MAX_TURNS = 15
 SCIENTIST_MAX_BUDGET = 0.25
-SCIENTIST_TOOLS = "Read,Edit,Write,Bash(python3:*),Bash(grep:*),Bash(tail:*),Bash(cat:*)"
+SCIENTIST_TOOLS = "Read,Edit,Write"
 
 # Supervisor
 SUPERVISOR_MAX_BUDGET = 2.0
@@ -165,9 +165,17 @@ def run_trial(problem, trial_num, *, log_dir, model=SCIENTIST_MODEL,
 
     start = time.monotonic()
     returncode, _ = _run_cli(cmd, prompt=prompt, log_path=log_file)
-    elapsed = time.monotonic() - start
 
-    status = "done" if returncode == 0 else "failed"
+    # Post phase: harness evaluates train.py (Scientists cannot call prepare.py)
+    eval_result = subprocess.run(
+        ["uv", "run", "python3", "-m", f"scientist.{problem}.prepare"],
+        capture_output=True, text=True, timeout=120,
+    )
+    if eval_result.stdout:
+        print(eval_result.stdout, end="", file=sys.stderr)
+
+    elapsed = time.monotonic() - start
+    status = "done" if returncode == 0 and eval_result.returncode == 0 else "failed"
     return TrialResult(problem, trial_num, status, elapsed)
 
 

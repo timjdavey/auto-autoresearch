@@ -4,19 +4,19 @@ Your job is to improve the design of `train.py` through systematic experimentati
 
 ## Turn budget — HARD LIMIT
 
-You have a **hard turn limit** enforced by the harness. When you hit it, the process stops immediately — any unsaved work is lost. Each turn = one assistant response. A typical plan/edit/run cycle costs 3–5 turns.
+You have a **hard turn limit** (15 turns) enforced by the harness. When you hit it, the process stops immediately — any unsaved work is lost. Each turn = one assistant response.
 
 **Rules:**
-- **Write to `memory.md` continuously** — after every meaningful result, not just at the end. If the process stops mid-trial, memory.md is the only thing that persists.
-- **Reserve your last 2–3 turns** for saving state: update memory.md with your best findings, what worked, what didn't, and what to try next.
+- **Write to `memory.md` continuously** — after every meaningful change, not just at the end. If the process stops mid-trial, memory.md is the only thing that persists.
 - **Don't start a new idea if you're near the limit** — consolidate and document instead.
 
 ## Core loop
 
 1. **Come up with an idea** — what algorithmic change, parameter tweak, or initialization strategy might help?
 2. **Edit the file** — implement it in `train.py`.
-3. **Run the evaluation** — `uv run prepare.py` to measure impact.
-4. **Reflect and diagnose** — if it crashes or fails, diagnose WHY (which instance size? which solver phase? deterministic or random?). Don't just move on.
+3. **Update `memory.md`** — record what you changed, your hypothesis, and what to try next.
+
+The harness runs `prepare.py` automatically after your trial ends. You cannot run it yourself. You will see the results in `results.tsv` at the start of your next trial.
 
 ## Your trial budget is limited — learn fast
 

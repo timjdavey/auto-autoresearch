@@ -284,9 +284,23 @@ def log_result(train_results):
         writer.writerow(row)
 
 
+def _get_prev_best():
+    """Read max avg_improvement from results.tsv, or None if no prior results."""
+    if not os.path.exists(RESULTS_LOG_PATH):
+        return None
+    try:
+        with open(RESULTS_LOG_PATH) as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            values = [float(r["avg_improvement"]) for r in reader if r.get("avg_improvement")]
+        return max(values) if values else None
+    except (ValueError, KeyError):
+        return None
+
+
 if __name__ == "__main__":
     from scientist.qap.train import solve
 
+    prev_best = _get_prev_best()
     train_results = evaluate(solve)
 
     print("\n=== Evaluation ===\n")
@@ -296,10 +310,11 @@ if __name__ == "__main__":
         if data.get("valid"):
             print(
                 f"  {name:12s}  {data['cost']:>12d} / {data['baseline']:>12d}"
-                f"  {data['improvement']:>+8.2%}  {data['time']:.3f}s"
+                f"  {data['improvement']:>+8.2%}  {data['time']:.1f}/{TIME_BUDGET}s"
             )
         else:
             print(f"  {name:12s}  FAILED: {data.get('error', 'unknown')}")
-    print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}  |  success_rate: {train_results['success_rate']:.0%}  |  total_time: {train_results['total_time']}s")
+    best_str = f" (prev best: {prev_best:.2%})" if prev_best is not None else ""
+    print(f"\n  avg_improvement: {train_results['avg_improvement']:.2%}{best_str}  |  success_rate: {train_results['success_rate']:.0%}  |  total_time: {train_results['total_time']}s")
 
     log_result(train_results)

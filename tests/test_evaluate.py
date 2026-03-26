@@ -515,6 +515,8 @@ class TestPrintReport(unittest.TestCase):
             "tail_velocity": 0.005,
             "overall_velocity": 0.009,
             "tailing_off": False,
+            "distinct_levels": 8,
+            "metric_diversity": 0.8,
         }
         defaults.update(overrides)
         return defaults

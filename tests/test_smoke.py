@@ -8,17 +8,11 @@ import unittest
 
 from supervisor.evaluate import analyse
 
-from scientist.gc.train import solve as gc_solve
-from scientist.gc.prepare import evaluate as gc_evaluate
-
 from scientist.qap.train import solve as qap_solve
 from scientist.qap.prepare import evaluate as qap_evaluate
 
 from scientist.facloc.train import solve as fl_solve
 from scientist.facloc.prepare import benchmark as fl_benchmark, evaluate as fl_evaluate
-
-from scientist.lop.train import solve as lop_solve
-from scientist.lop.prepare import benchmark as lop_benchmark, evaluate as lop_evaluate
 
 from scientist.maxsat.train import solve as maxsat_solve
 from scientist.maxsat.prepare import evaluate as maxsat_evaluate
@@ -88,17 +82,11 @@ def _run_pipeline(test_case, evaluate_fn, solve_fn):
 
 
 class TestEndToEndPipeline(unittest.TestCase):
-    def test_graph_colouring_pipeline(self):
-        _run_pipeline(self, gc_evaluate, gc_solve)
-
     def test_qap_pipeline(self):
         _run_pipeline(self, qap_evaluate, qap_solve)
 
     def test_facility_location_pipeline(self):
         _run_pipeline_with_benchmark(self, fl_evaluate, fl_benchmark, fl_solve)
-
-    def test_lop_pipeline(self):
-        _run_pipeline_with_benchmark(self, lop_evaluate, lop_benchmark, lop_solve)
 
     def test_maxsat_pipeline(self):
         train_results = maxsat_evaluate(maxsat_solve)

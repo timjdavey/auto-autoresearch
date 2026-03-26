@@ -21,7 +21,7 @@ There are two layers to the system:
 * **Inner improvement only**. For the same reasons as above, we allow the Supervisor to only do a minimal amount of self-improvement via self reflection in the `/supervisor/` files (journal, ideas, and reflections).
 * **Filesystem over git**. We've opted for storing previous iterations as files over git as it allows us to slightly easier manage what previous experiments are considered (as this is a multi-layered inception style system of iterations).
 * **Invocation**. Scientists are explicitly called in parallel via a CLI as this was more robust than trying to get the Supervisor to spin up multiple parallel sub-agents. Similarly we use claude here because that's our subscription, but could add codex on request.
-* **Minimal**. It's already a complex conceptual setup, so we've tried to not overengineer anything. We've only included two problems for generalisation & replication.
+* **Minimal**. It's already a complex conceptual setup, so we've tried to not overengineer anything. We've only included three problems for generalisation & replication.
 * **Human readability**. The only exception to this is breaking the learnings into three easier to consume files for the humans `ideas.md` and `reflections.md`, seperate from the `journal.md`.
 
 
@@ -58,10 +58,8 @@ The most interesting ones to review are `supervisor/journal.md`, `supervisor/ide
 ## Problem experiments
 
 Chosen problems:
-- Graph colouring (gc)
 - Quadratic assignment problem (qap)
 - Maximum satisfiability (maxsat)
-- Linear ordering problem (lop)
 - Facility location, uncapacitated (facloc)
 
 We chose these as we want:
@@ -101,12 +99,15 @@ uv run shutdown
 - The Supervisor seems to only attempt to manage or consider what metrics & evaluations it has. Even when prompted to construct it's own, it is highly resistant to do this. So we've overindexed on creating more metrics than we need, then getting it to select & reflect on the tradeoffs for each. This is likely more robust and reflective of complex environments over simple paperclip factories where you're optimising against a single loss function. 
 - Scientists (like all agents) can often go off the rails. We found that ~70% of the token cost was from <5% of the runs. The smoking gun with all those runs was when they used the `TodoWrite` tool when the others didn't. So this is now off limits and we've added a max-budget.
 - Similarly context rot / going off the rails is still a problem for Sonnet (which the Scientist uses), so we've bounded the Supervisor & Scientist to small invocations. This also forces the models to be deliberate about writing their learnings down. Small in this case is a limited set of `--max-turns` and `--max-budget`.
-- Surprisingly Haiku gives enough of a signal about what works. So has become the default Scientist, as we can run more studies in the same time, plus more parallel agents without destroying the token budget.
+- We're most interested in velocity of scientists (i.e. improvement per trial) so we have to force the Scientists to only take one actual attempt per trial. The Supervisor quickly learnt more attempts per trials gave the best results, but they then made the study invalid (which the Supervisor struggled to care about). So we had to force both the Supervisor & Scientist to only do one attempt per trial by manually calling `prepare.py`. 
+- Surprisingly Haiku gives enough of a signal about what works and doesn't explode as often. So has become the default Scientist, as we can run more studies in the same time, plus more parallel agents without destroying the token budget.
 - Identical replications don't add enough value for their cost at this stage. We're not looking for statistical significance, we're playing at the boundary of simplicity & optimisation.
 - Supervisor was reluctant to suggest anything radical like introducing a "MEMORY.md" even when heavily prompted. At first it was frustrating as limits the experimental evolution. But in retrospect it's great, as means we can pick up the requests from `reflections.md` and conciously add infrastructure complexity.
 - Problem depth if everything. There needs to be a huge number of paths & gains to be had by the Scientists to get any sort of signal. But at the same time, not _too_ many otherwise you can't see any plateau and difference with the `guidance.md`.
 - More tools (particularly numba) decreased creativity and optionality of paths of Scientists, so removed and kept dependancies small (like original autoresearch).
 - TSP (Travelling Salesman Problem) was ditched as a problem as produced the worst signal. Despite having a vast theoretical optimisation landscape, it has a tiny *effective* landscape: LLMs converge to the same memorised dominant heuristic (nearest-neighbor + 2-opt) regardless of guidance, hitting a ceiling at ~0.20 improvement that doesn't vary. Large instances (needed to prevent trivial solving) consumed 90% of the time budget, leaving no room for algorithmic diversity. A "solved" problem with well-known optimal heuristics produces worse signal than a less famous problem where the LLM must genuinely explore. QAP, being less prominent in training data and having no single dominant algorithm has been far better.
+- Graph Colouring (GC) was removed after 5 studies. Despite scaling to larger instances (300/400/300e nodes), DSATUR is a memorised dominant algorithm that LLMs converge to regardless of guidance. Only 4 distinct `avg_improvement` values across 57 trials, plateau at trial 7. Larger graphs don't fix the underlying problem — DSATUR dominance is algorithmic, not a metric granularity issue.
+- Linear Ordering Problem (LOP) was removed after 5 studies. LOP was actively harmed by guidance changes: regressed from 9.62% to 4.82% across studies. After 35+ trials of exhausted initialization diversity, concrete guidance re-suggested already-tried strategies, causing -4.18% regression in Study 4. The problem has too narrow an effective landscape for guidance to matter.
 - Gemini CLI just can't operate in this mode.
 
 
@@ -125,6 +126,7 @@ Each problem's `prepare.py` reports `avg_improvement` — the percentage gain ov
 - *Plateau detection:* `plateau_trial` (3+ consecutive non-improvements), `longest_plateau`, `tail_velocity` vs `overall_velocity`, `tailing_off` flag
 - *Reliability:* `num_errors`, `error_rate`, `num_regressions` (>10% drop from running best), `avg_success_rate` + first/last trend
 - *Efficiency:* `avg_training_time`
+- *Problem health:* `distinct_levels` (unique improvement values), `metric_diversity` (distinct levels / trials)
 
 **Ensemble-level** (from `_compute_aggregate()`):
 - `mean_headroom_captured` — `mean((new_best - old_best) / (1 - old_best))` per problem, normalises cross-problem progress

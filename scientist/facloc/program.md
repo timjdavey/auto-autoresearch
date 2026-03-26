@@ -9,7 +9,7 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 ## Files
 
 - **`scientist/facloc/train.py`** — Your solver. Contains `solve(opening_costs, assign_costs)` which takes facility opening costs and an assignment cost matrix, and returns an assignment of clients to facilities. **This is the only file you modify.**
-- **`scientist/facloc/prepare.py`** — Evaluation harness. Run `python3 -m scientist.facloc.prepare` to evaluate. **Do not modify.**
+- **`scientist/facloc/prepare.py`** — Evaluation harness (run automatically by the harness after your trial). **Do not modify or run.**
 - **`scientist/facloc/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
 - **`scientist/facloc/archive/best.py`** — Code from the best-scoring prior trial. Use this if the current `train.py` is worse.
 - **`scientist/facloc/archive/summary.md`** — Compact summary of all prior trials and their scores.
@@ -21,8 +21,9 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 1. Read `results.tsv` and `archive/summary.md` to understand prior trial scores.
 2. Read `train.py`. If the last trial regressed, start from `archive/best.py` instead.
 3. Plan ONE targeted improvement. Make the edit.
-4. Run evaluation immediately: `python3 -m scientist.facloc.prepare`
-5. If it crashes or regresses badly, revert and try a different approach. Do not spend time debugging.
+4. Update `memory.md` with what you changed, your hypothesis, and what to try next.
+
+The harness runs `prepare.py` automatically after your trial ends — do not run it yourself.
 
 ## Metric
 

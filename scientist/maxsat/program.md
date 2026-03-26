@@ -9,7 +9,7 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 ## Files
 
 - **`scientist/maxsat/train.py`** — Your solver. Contains `solve(n_vars, clauses)` which takes a CNF formula and returns a truth assignment (list of bools). **This is the only file you modify.**
-- **`scientist/maxsat/prepare.py`** — Evaluation harness. Run `python3 -m scientist.maxsat.prepare` to evaluate. **Do not modify.**
+- **`scientist/maxsat/prepare.py`** — Evaluation harness (run automatically by the harness after your trial). **Do not modify or run.**
 - **`scientist/maxsat/results.tsv`** — Metrics from every trial (written automatically by prepare.py). Read this to see what previous trials achieved.
 - **`scientist/maxsat/archive/best.py`** — **The best-performing code so far.** This is your recommended starting point.
 - **`scientist/maxsat/archive/trial-*.py`** — Code snapshots from every prior trial. Read these to see what approaches have already been tried.
@@ -21,7 +21,9 @@ Before starting, read `scientist/guidance.md` for research methodology guidance.
 1. Read `archive/best.py` if it exists — this is the best-performing code and your starting point.
 2. Read `train.py`. If it scores below best, start from `archive/best.py`.
 3. Plan ONE targeted improvement. Make the edit.
-4. Run evaluation: `python3 -m scientist.maxsat.prepare`
+4. Update `memory.md` with what you changed, your hypothesis, and what to try next.
+
+The harness runs `prepare.py` automatically after your trial ends — do not run it yourself.
 
 ## Metric
 

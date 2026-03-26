@@ -1,82 +1,16 @@
 # Ideas
 
-List of ideas to test to improve how the Scientist conducts their work.
-DO NOT include (or consider) any problem specific ideas.
-RED FLAG that you need to given seperate advice for each problem.
+- This is a list of ideas to test to improve how the Scientist conducts their work.
+- DO NOT include (or consider) any problem specific ideas.
+- DO NOT include any specific outcomes or per stage information (that is what `journal.md` is for).
+- RED FLAG that you need to given seperate advice for each problem.
+- STRICTLY keep to this format.
 
+## Results analysis
 
-## Study 2 Results — COMPLETED
+`improvement_velocity`
+- is particularly useful when ...
 
-**Outcome:** Mixed. Aggregate +1.25%, but divergence revealed: MaxSAT +6%, LOP -0.34%, GC/FacLoc flat.
-
-### 1. Neighborhood Structure guidance — CONDITIONAL, NOW IMPLEMENTED FOR STUDY 3
-   - **What worked:** MaxSAT breakthrough (+6.2%) using aggressive 2-opt/1-opt combinations. Guidance on "when to use 2-opt vs 1-opt" energized exploration in a problem without pre-existing neighborhoods.
-   - **What failed:** LOP regression (-0.34%). Scientists already using 2-opt/3-opt (evident in train.py) tried parameter tuning instead of algorithmic redesign. Guidance created negative feedback: "try 2-opt variants" → already have it → adjust iters → worse results.
-   - **Root cause:** Guidance was too generic. MaxSAT benefited; LOP was harmed because it wasted budget on incremental parameter tweaks within an already-explored design space.
-   - **Solution (Study 3):** Added CRITICAL CHECKPOINT at top of "Neighborhood Structure" section: "Are you already using 2-opt? If yes, skip to initialization diversity and timeout management." Also added new "Initialization diversity & timeout management" section for problems with advanced neighborhoods. This preserves MaxSAT's breakthrough while redirecting LOP/QAP toward multi-seed, greedy variants, and phase profiling.
-
-### 2. Weak-problem support — PARTIALLY ADDRESSED
-   - **QAP (13.8% → 14.48%):** Marginal +0.65%. Still has 10+ timeouts on rand75a. Time budget is bottleneck, not algorithm diversity.
-   - **LOP (9.6% → 9.28%):** Regression. Guidance backfired.
-   - **Insight:** Weak problems need different help. Time profiling (Study 1) worked better than neighborhood tweaks. For Study 3, emphasize timeout diagnosis + algorithm selection rather than parameter variations.
-
-### 3. Guidance quality signal — SUCCESS
-   - GC/FacLoc flat (19% and 64%): no regression, just no improvement. They're already optimized locally.
-   - All problems executed cleanly with reasonable trial counts. Harness and error handling working well.
-
-## Study 3 Implementation & Results — FAILED
-
-1. ✅ **Attempted Refactor:** Added CRITICAL CHECKPOINT: "Are you already using 2-opt? If yes, skip to initialization diversity."
-   - **Outcome:** CATASTROPHIC FAILURE. MaxSAT dropped 4.23% (98.61% → 94.38%). The conditional checkpoint disrupted MaxSAT's winning path instead of preserving it.
-   - **Root cause:** Checkpoints that tell Scientists to "skip sections" are dangerous — they may cause loss of critical guidance. MaxSAT benefited from the neighborhood discussion; the skip instruction removed that benefit.
-   - **Lesson:** Conditional branches should ADD guidance for specific states, not DELETE it. Avoid "skip" instructions.
-
-2. ✅ **Attempted Redirect:** Created "Initialization diversity & timeout management" section for problems with advanced neighborhoods.
-   - **Outcome:** NO IMPROVEMENT. LOP -0.05%, QAP -1.07%. The redirect didn't generate expected gains.
-   - **Root cause:** Weak guidance. Section provided concepts (multi-seed, phase profiling) but no concrete, actionable next steps. Scientists didn't know how to apply it.
-   - **Lesson:** "Try initialization diversity" is too vague. Guidance must include concrete examples (e.g., "try 5–10 random seeds with different greedy orderings").
-
-3. ✅ **Preserved neighborhood discussion:** For problems without 2-opt, kept the neighborhood section intact.
-   - **Outcome:** GC improved +1.56% — only positive signal. But GC also ran 33 trials vs 50–56 expected, so unclear if true improvement or trial variation.
-
-### Study 3 Expectations vs Reality
-- **MaxSAT:** Expected ~98.6%, Got 94.38% ✗✗✗ CATASTROPHIC FAILURE
-- **LOP:** Expected 9.6%+, Got 9.23% ✗
-- **QAP:** Expected 14.48%+ improvement, Got 13.41% ✗
-- **GC:** Expected maintenance, Got +1.56% ✓ (but low trial count suggests noise)
-- **FacLoc:** Expected maintenance, Got +0.62% ✓ (marginal)
-
-## Study 4 Plan — RECOVERY & REFINEMENT
-
-**Hypothesis:** Study 2 guidance was clear and focused (neighborhood discussion + plateau breaking). Study 3 broke it by adding conditional "skip" instructions and vague guidance. Recovery: return to Study 2 baseline, remove problematic checkpoint, and add ONE concrete refinement: replace vague "Initialization diversity" section with concrete examples.
-
-**Changes:**
-1. **Remove CRITICAL CHECKPOINT from Neighborhood Structure** — the "If you already use 2-opt, skip to initialization diversity" instruction caused MaxSAT to lose context (-4.23%). Checkpoints that DELETE sections are dangerous. Keep the full neighborhood discussion.
-2. **Rewrite Initialization diversity section with concrete examples** — replace vague guidance with actionable strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization (random → greedy → multi-start)", "Use problem structure (facility-first for facloc, node-degree-ordering for GC)". This addresses Study 3's failure on weak problems (LOP, QAP).
-3. **Keep Study 2 structure intact** — Plateau detection, Neighborhood structure (minus checkpoint), Error-first exploration remain as proven.
-
-**Expected outcome:** Restore MaxSAT to 98.6%+, help weak problems with concrete initialization guidance, aggregate 41%+.
-
----
-
-## Study 5 Plan — Measure Consistency & Prepare Reflection
-
-**Hypothesis:** Study 4 revealed a fundamental tension:
-- Strong problems (FacLoc, MaxSAT) respond well to neighborhood guidance, showing continued improvement (FacLoc +2.67%, MaxSAT +4.93% recovery)
-- Weak problems (LOP, QAP) regress from the same guidance (LOP -4.18%, QAP -0.97%), likely because generic strategies (multi-seed, initialization diversity) are already exhausted in their prior trial history
-- Generic guidance **diverges by problem type**. After 4 studies, this is provably fundamental.
-
-**Study 5 decision:** Run with NO CHANGES to guidance.md (keep Study 4 structure intact). Instead, measure:
-1. **Consistency:** Are Study 4 results stable/reproducible, or is there high noise?
-2. **Ceiling detection:** Where are we relative to local optima? (FacLoc improving, MaxSAT very high, LOP/QAP seem broken)
-3. **Foundation for Study 6 decision:** Do results confirm that generic guidance has hit a divergence wall, requiring either:
-   - Problem-specific branches (proposal to human in reflections.md)
-   - Meta-guidance pivote: teach Scientists how to diagnose "is this a problem I can solve with current approach?" (alternative proposal)
-   - Acceptance of weak-problem failure (minimize divergence by giving up on LOP/QAP)
-
-**Action:** No guidance.md edits. Update journal.md during POST-STUDY with consistency analysis.
-
----
 
 ## Untested ideas
 
@@ -111,49 +45,14 @@ RED FLAG that you need to given seperate advice for each problem.
 ## Proven strategies
 
 *(what reliably works, and why)*
-- **Multi-start heuristic initialization:** Graph Colouring's multi-start DSATUR (12 high-degree + 12 random starting points) reliably improved solutions. Generalizable: starting point diversity matters. GC maintained 19% across studies = proof of stability.
-- **Local search with max-iteration guards:** Graph Colouring's reduce_colors() with iteration limits (passes < 3) avoids computational blow-up. Key: bounded loops prevent timeouts.
-- **Failure diagnosis + time profiling:** Study 1 profiling ("which phase dominates?") helped identify bottlenecks. Study 2 showed this is more effective than blind parameter tweaking. When scientists understand timing, they make better algorithm choices.
-- **Asymptotic complexity awareness:** When Scientists understood O(n^k) bottlenecks via time profiling, they swapped to better algorithms. Key: "what's consuming the budget?" guidance surfaces the right optimization target.
-- **Conditional local search guidance:** MaxSAT +6% via "try 2-opt vs 1-opt" guidance. Works when the solver doesn't already use advanced neighborhoods. Generalizable: check current solver state before suggesting variant neighborhoods.
+...
 
 ## Promising
 
 *(showed potential, needs refinement — what to tweak)*
-- **Timeout diagnostics for weak problems:** QAP and LOP both show persistent timeouts (10+ per study). Instead of "try more neighborhoods", better guidance: "isolate which instance size (50/60/75 for QAP, 75/100/125 for LOP) times out, then reduce algorithm complexity only for that size." Conditional adaptation may unlock improvements.
-- **Initialization diversity WITH concrete examples:** Study 3 showed vague "try initialization diversity" guidance failed (LOP -0.05%, QAP -1.07%). But Study 3 memory.md from prior trials shows multi-seed diversification worked (+58.85% in facloc-trial_6, multi-seed diversification). Solution: provide concrete examples in guidance: "Try 5–10 random seeds with different greedy orderings" or "Swap initialization from random→facility-first for facloc."
-- **GC's marginal improvement signal:** Study 3 showed GC +1.56%, but trial count dropped (33 vs 50–56 expected). Need to isolate: is +1.56% real improvement or trial variation? Run Study 4 with stable trial budgets to clarify.
-- **Simplification as recovery:** Study 2 worked well (aggregate +1.25%, MaxSAT +6.2%), Study 3 broke everything. Hypothesis: Study 2 guidance was clear and focused; Study 3 added too much complexity (checkpoints, redirects, new sections). Recovery strategy: Return to Study 2 guidance as baseline for Study 4, test ONE small refinement in isolation.
-
-## Study 4 Implementation & Results — PARTIAL RECOVERY
-
-1. ✅ **Removed "skip" checkpoint:** Restored full neighborhood section (no deletion instructions).
-   - **Outcome:** MaxSAT jumped +4.93% (94.38% → 99.31%), best across all studies.
-   - **Root cause identified:** Study 3's "If you already use 2-opt, skip to initialization diversity" instruction caused Scientists to skip examples and context needed for neighborhood exploration. Confirmation: **Never use "skip" instructions in conditional guidance.**
-
-2. ❌ **Concrete initialization examples did NOT help weak problems:**
-   - Added explicit strategies: "Try 5–10 random seeds with different greedy orderings", "Swap initialization (random → greedy → multi-start)", "Use problem-specific construction (facility-first for facloc, degree-ordering for GC)"
-   - **Outcome:** LOP crashed -4.18% (9.23% → 5.05%), QAP regressed -0.97% (13.41% → 12.44%). Both weak problems got worse.
-   - **Root cause:** LOP memory.md shows prior 35+ trials exhaustively tested initialization diversity (multi-seed, greedy variants, random) across trials 29–38, all failed. Study 4 guidance re-suggested these same strategies, causing Scientists to waste budget re-exploring known-dead parameter space instead of attempting fundamentally different algorithms (Tabu, SA, Lin-Kernighan).
-   - **Lesson:** Generic guidance cannot know which strategies are already exhausted on a problem. Weak problems need algorithmic redesign hints, not more parameter exploration.
-
-3. ✅ **FacLoc sustained improvement (+2.67%):** Continued upward trajectory (67.17%), not yet plateaued.
-   - **Insight:** FacLoc responds well to iterative refinement; two-phase local search (facility-closing + client moves) provides steady gains.
-
-### Study 4 Expectations vs Reality
-- **MaxSAT:** Expected ~98.6%, Got 99.31% ✓✓ (exceeded expectation, recovery complete)
-- **FacLoc:** Expected maintenance, Got +2.67% ✓ (better than expected)
-- **LOP:** Expected 9.6%+, Got 5.05% ✗✗✗ (catastrophic, unexpected regression)
-- **QAP:** Expected marginal improvement, Got -0.97% ✗ (continued weakness)
-- **GC:** Expected maintenance, Got -1.54% ✗ (minor regression)
+...
 
 ## Abandoned
 
 *(tried and failed, or logically flawed — why, to avoid re-testing)*
-- **Generic "try 2-opt" guidance for all problems:** Study 2 showed this backfires for problems already using neighborhoods. LOP regressed -0.34% when guidance encouraged 2-opt parameter tweaks (already present, parameter variations didn't help). Action: Make neighborhood suggestions conditional on solver state.
-- **Minimal guidance (4-point process):** Study 1 showed Scientists need structure to handle failure modes. No room for reflection, diagnosis, or strategic pivots. Insufficient for harder problems (TSP, QAP).
-- **"If a run crashes move on" strategy:** Leads to silent failure: Scientist doesn't learn why, can't improve, just retries the same broken solver. Study 2 proved explicit diagnosis is required.
-- **Problem-agnostic plateau advice:** Study 2 showed all problems hitting plateaus, but each needs different escape strategy. MaxSAT: neighborhood tweaks. LOP: initialization diversity or timeout mgmt. GC: already optimal locally. One-size guidance creates divergence.
-- **Conditional "skip" instructions in guidance:** Study 3 CONFIRMED: catastrophic failure (-4.23% MaxSAT). Study 4 CONFIRMED: removing "skip" checkpoint restored MaxSAT to 99.31%. Reason: skipping removes context and examples Scientists need. Conditional branches should ADD guidance, not DELETE sections. **DEFINITIVELY: Never use "skip" instructions.**
-- **Vague initialization diversity guidance:** Study 3 failed (-0.05% LOP, -1.07% QAP). Study 4 showed concrete examples also failed (-4.18% LOP, -0.97% QAP) because guidance re-suggested strategies already exhausted in prior trials. Lesson: Generic "try X" guidance cannot account for problem-specific exploration history. **Problem-specific guidance needed or accept failure on weak problems.**
-- **One-size-fits-all guidance across five problems:** After 4 studies, divergence is now provably fundamental. FacLoc (+67%), MaxSAT (+99%) respond to neighborhood/phase refinement. LOP (-5%), QAP (+12%) need algorithmic redesign (Tabu, SA, ILS). GC (+19%) already locally optimal. **Guidance must either be problem-specific or abandon hope for weak-problem improvements.**
+...

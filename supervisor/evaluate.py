@@ -218,6 +218,10 @@ def analyse(rows):
     # Improvement velocity (best - first) / num_trials
     improvement_velocity = (best_avg_improvement - first) / n if n > 0 else 0.0
 
+    # Problem health metrics
+    distinct_levels = len(set(round(v, 4) for v in valid_improvements)) if valid_improvements else 0
+    metric_diversity = distinct_levels / n if n > 0 else 0.0
+
     return {
         "num_trials": n,
         "first_avg_improvement": first,
@@ -244,6 +248,8 @@ def analyse(rows):
         "tail_velocity": tail_velocity,
         "overall_velocity": overall_velocity,
         "tailing_off": tail_velocity < overall_velocity * 0.5 if n >= 5 else None,
+        "distinct_levels": distinct_levels,
+        "metric_diversity": metric_diversity,
     }
 
 
@@ -261,6 +267,7 @@ def _compute_aggregate(all_stats):
         "total_improvement", "improvement_per_trial", "improvement_velocity",
         "avg_training_time",
         "tail_trials", "tail_velocity", "overall_velocity",
+        "distinct_levels", "metric_diversity",
     ]
     n_problems = len(all_stats)
     aggregate = {}
@@ -268,7 +275,8 @@ def _compute_aggregate(all_stats):
         aggregate[key] = sum(s[key] for s in all_stats.values()) / n_problems
     # Round integer fields
     for key in ("num_trials", "tail_trials", "best_trial", "num_errors",
-                "num_new_bests", "longest_plateau", "num_regressions"):
+                "num_new_bests", "longest_plateau", "num_regressions",
+                "distinct_levels"):
         aggregate[key] = round(aggregate[key])
     # Tailing off: True if any problem is tailing off
     tailing_values = [s["tailing_off"] for s in all_stats.values() if s["tailing_off"] is not None]
@@ -409,6 +417,7 @@ def write_summary(output_path=None, archive_dir=None):
             "plateau_trial", "longest_plateau", "tail_velocity", "tailing_off",
             "avg_success_rate", "num_errors", "num_regressions",
             "avg_training_time",
+            "distinct_levels", "metric_diversity",
         ]
 
         header = "| metric | " + " | ".join(
@@ -454,6 +463,23 @@ def analyse_and_save(timestamp=None, output_path=None, archive_dir=None):
 
     all_stats["_aggregate"] = _compute_aggregate(all_stats)
 
+    # Problem health flags (informational for Supervisor)
+    health = {}
+    for problem, stats in all_stats.items():
+        if problem == "_aggregate":
+            continue
+        flags = []
+        if stats["distinct_levels"] <= 5:
+            flags.append("LOW_GRANULARITY")
+        if stats["metric_diversity"] < 0.1:
+            flags.append("LOW_DIVERSITY")
+        if stats["plateau_trial"] is not None and stats["plateau_trial"] <= 10:
+            flags.append("EARLY_PLATEAU")
+        if stats["avg_training_time"] < 5:
+            flags.append("TOO_EASY")
+        health[problem] = flags
+    all_stats["_health"] = health
+
     # Write full summary (archive + current)
     write_summary(output_path=output_path, archive_dir=archive_dir)
 
@@ -497,6 +523,7 @@ def print_report(stats, problem=None):
     print(f"{prefix}Median avg_improvement: {stats['median_avg_improvement']:.6f}")
     print(f"{prefix}Stdev avg_improvement:  {stats['stdev_avg_improvement']:.6f}")
     print(f"{prefix}Avg training time:       {stats['avg_training_time']:.1f}s")
+    print(f"{prefix}Distinct metric levels:  {stats['distinct_levels']} / {stats['num_trials']} trials (diversity: {stats['metric_diversity']:.2f})")
 
 
 # ---------------------------------------------------------------------------
