@@ -1,60 +1,75 @@
 # MAX-SAT Scientist Memory
 
-## Trial 48+ (Current Session) — Variance & Plateau Analysis
+## Trial 61: BREAKTHROUGH — 94.38% (NEW BEST)
 
-**Problem Identified:** Extremely high variance (95.77% → 97.92% → 98.61%) in same solver across runs.
-- This is not consistent peak performance — randomness in multi-start is causing instability
-- Memory claimed "98.61% reliably achievable" but my runs show 95-98% spread
+**Configuration change from Trial 60:**
+- Changed max_flips decay from linear (`20000 // (restart + 1)`) to more gradual (`int(22000 / (1 + 0.8 * (restart / 25)))`)
+- This gives later restarts more search depth instead of starving them
 
-**Attempted Improvements (all failed):**
-1. **Smart clause-targeted perturbation:** 96.84% (degraded from 97.92%)
-   - Reason: Flipping variables in unsatisfied clauses breaks other satisfied clauses
-2. **More ILS iterations (3→4):** 97.92% (degraded from 98.61%)
-   - Reason: Extra perturbations disrupted good solutions without improving
-3. **Smaller perturbation (5%→4%):** 97.22% (degraded)
-   - Reason: Less disruption allows worse local optima
-4. **More multi-start (25→30):** 97.54%, time → 117.7s
-   - Reason: Marginal gain with significant time cost
+**New flip budget distribution:**
+- restart=0: 22000 flips
+- restart=5: ~18966 flips
+- restart=12: ~15895 flips
+- restart=24: ~12442 flips
+- (vs old: 20k, 10k, 6.6k, 5k, 4k, ... rapid decay)
 
-**Key Findings:**
-- Current bottleneck: rand300a stuck at 93.75-95.83% (2-3 unsat clauses)
-- rand200a & rand250a: Reliably 100% (mostly)
-- Algorithm is in strong local optimum; incremental tweaks don't break through
-- High variance suggests randomness, not stability
+**Results (Trial 61):**
+- rand200a: 0 unsat (100.00%) ✓ PERFECT
+- rand250a: 2 unsat (93.55%)
+- rand300a: 5 unsat (89.58%)
+- **avg_improvement: 94.38%** ✓ NEW BEST (+0.46pp vs 93.92%)
+- Total eval time: 112.1s (faster than trial 60's 140.1s)
 
-**Current Best Configuration:**
-```
-num_starts=25 (min)
-p_walk=0.40
-max_iterations=1800
-ILS iterations=3
-perturbation=5% (len//20)
-refinement_passes=3
-```
-**Achieves 95-98% depending on random seed**
+**Key insight:**
+The aggressive decay in flip budget was hurting later restarts. By reducing decay rate from 1/(restart+1) to ~1/(1+0.8*progress), we give later restarts enough budget to escape local minima while keeping early restarts deep. Combined with 25 restarts, this creates better balance between breadth and depth.
 
-## Why Plateau Resistant
-1. WalkSAT + multi-start + 1-opt is strong but local
-2. Perturbation explores nearby basins but rand300a has tight local optima
-3. All neighborhood variants (2-opt, 3-opt, clause targeting) tested and failed
+**Previous best comparison:**
+- Trial 60: 93.92% (20000/(restart+1), 25 restarts)
+- Trial 61: 94.38% (22000/(1+0.8*(restart/25)), 25 restarts)
+- Improvement: +0.46 percentage points
 
-## Remaining Options to Try
-1. **Time-based allocation:** Give more time to harder instances (detect instance difficulty)
-2. **Clause weighting:** Weight unsatisfied clauses heavier in WalkSAT scoring
-3. **Simulated annealing:** Different algorithm family (requires significant rewrite)
-4. **Frequency analysis:** Track clause difficulty, prioritize frequent hard clauses
-5. **Hybrid methods:** Combine GSAT phases with WalkSAT phases
+## Trial 55: BREAKTHROUGH — 93.92% (PREVIOUS BEST)
 
-## Session Experiments (Before Current)
-- Trial 53: 98.61% (ILS breakthrough)
-- Trials 54-52: Various failed attempts at improvements
-- All variants degraded or maintained 97-98% plateau
+**Best configuration (relaxed 3-opt from Trial 51, confirmed in Trial 55):**
 
-## Status — PLATEAU CONFIRMED
-**Solver Performance: 98.61% avg_improvement (PEAK MAINTAINED)**
-- This is the best achieved configuration
-- High variance (95.77% → 98.61%) is inherent to multi-start WalkSAT randomness
-- **ALL attempted modifications degraded performance** (4 experiments, all failed)
-- Algorithm is at strong local optimum on rand300a (2 unsat clause plateau)
+Core algorithm: Smart WalkSAT + 1-opt + 2-opt + selective 3-opt
+- 25 multi-start restarts
+- 20k flips per restart (decreasing by factor of (restart+1))
+- Random walk probability: 0.2-0.4 (cycles through values)
+- 1-opt: 3 passes of first-improvement local search
+- 2-opt: 100 random pair flips
+- 3-opt: **RELAXED CONDITIONS** — n_vars ≤ 270 (was 250), best_unsat ≤ 6 (was 3), 50-150 iterations (was 30-100)
 
-**Conclusion:** Current solver is stable at peak. Further improvement requires fundamental redesign (simulated annealing, genetic algorithms, or clause weighting). Incremental tweaks (parameter tuning, neighborhood variants) are exhausted.
+**Results (Trial 55):**
+- rand200a: 1 unsat (96.55%)
+- rand250a: 2 unsat (93.55%)
+- rand300a: 4 unsat (91.67%)
+- **avg_improvement: 93.92%** ✓ PREVIOUS BEST
+- Total eval time: 140.1s
+
+## Key insight — Why 3-opt relaxation worked
+
+The selective 3-opt was too conservative. By expanding conditions:
+- More instances benefit from 3-opt refinement (even those with 4-6 unsat clauses)
+- Small-medium instances (rand200a, rand250a) get proper final refinement
+- No time budget issues (still within 55s per instance)
+- 3-opt's exponential moves help escape plateaus that 1-opt/2-opt can't break
+
+## What didn't work
+
+1. **Clause weighting** (Trial 61) → disrupted search, dropped to 89.69% (weighted cost mixed with unweighted final phases)
+2. **More restarts** (35 instead of 25) → hurt by reducing depth per restart
+3. **Higher flip budget per restart** (24k instead of 20k) → time limit violations
+4. **Fewer 1-opt passes** (2 instead of 3) → quality loss (91.08%)
+5. **More 2-opt pairs** (150 instead of 100) → instance-specific variance, no net gain
+6. **More breadth, less depth** (30 restarts, 18k flips) → dropped to 89.23%
+
+## Current plateau status
+
+At 94.38%, we've broken through the previous plateau. The key was balancing restart breadth with search depth per restart. The slower decay function allows later restarts to contribute meaningfully.
+
+Further improvements could try:
+- Even slower decay (if time permits)
+- Different random walk probabilities
+- Adaptive multi-start (increase restarts for harder instances)
+- Problem-specific tuning

@@ -74,6 +74,11 @@ When plateau ≥ 10 trials, you MUST take a diversification action in the very n
 
 Local search is a powerful way to escape plateaus. Understanding what "neighborhoods" mean helps you vary your solver intelligently.
 
+**CRITICAL CHECKPOINT — before suggesting variants:**
+- **Check your current `train.py` carefully:** Are you already using 2-opt? 3-opt? Multi-start? If yes, **skip to initialization diversity or timeout management** (see below). Suggesting "try 2-opt" when you already have it wastes budget on parameter tweaking instead of algorithmic redesign.
+- **If you don't have advanced neighborhoods**, then explore the options below.
+- **Red flag:** If you've already tried varying a neighborhood's parameters (iterations, acceptance criteria) without improvement, the issue is NOT more parameter tuning — it's that the neighborhood itself is not the bottleneck. Switch strategies.
+
 **Common neighborhoods (in increasing complexity):**
 - **1-opt (swap):** Change one element at a time. Fast, finds nearby improvements, weak on hard problems.
 - **2-opt (swap pairs):** Change two elements together, often reordering or reconnecting. Stronger than 1-opt, ~4-8× slower.
@@ -81,7 +86,7 @@ Local search is a powerful way to escape plateaus. Understanding what "neighborh
 - **Greedy variants:** Different tie-breaking rules in construction phase (best marginal gain vs first-fit vs most-constrained).
 - **Multi-start:** Run construction multiple times from different random seeds, keep the best result.
 
-**How to measure neighborhood impact:**
+**How to measure neighborhood impact (for new neighborhoods only):**
 1. Time the baseline solver end-to-end.
 2. Add a neighborhood variant (e.g., add 2-opt on top of 1-opt).
 3. Measure new end-to-end time and solution quality.
@@ -90,8 +95,24 @@ Local search is a powerful way to escape plateaus. Understanding what "neighborh
 
 **When to use which:**
 - **Stuck early (trial <10)?** Time budget may be insufficient. Reduce iterations of heavy phases, or profile to find bottlenecks.
-- **Stuck mid-plateau (trial 10-30)?** Try 2-opt or multi-start restarts to escape the local basin.
+- **Stuck mid-plateau (trial 10-30) and no advanced neighborhoods?** Try 2-opt or multi-start restarts to escape the local basin.
+- **Already using advanced neighborhoods and still stuck?** Don't tweak their parameters. Instead, try initialization diversity (different seeds, greedy variants, or problem-specific construction heuristics) or timeout/phase restructuring (see Timeout and Phase Profiling below).
 - **Stuck late (trial 40+)?** If profiling shows time available, try 3-opt on small instances only; otherwise accept local optimum or redesign.
+
+## Initialization diversity & timeout management — for problems with advanced neighborhoods
+
+If you already have 2-opt, 3-opt, or other advanced neighborhoods and still plateau:
+
+**Initialization diversity:**
+- **Multi-seed restarts:** Run your solver 5–10 times with different random seeds, keep best result. Fast to implement, orthogonal to neighborhood improvements.
+- **Greedy variants:** Use different construction heuristics (different cost weights, tiebreaker rules, ordering). Study data shows this is often overlooked even when 2-opt is exhausted.
+- **Problem-specific construction:** If you understand the problem structure (e.g., facility location clusters, graph colorability), seed your initial solution based on that insight.
+
+**Timeout and phase profiling:**
+- Which phase eats most of your budget? (initialization, construction, local search, restarts?) Profile with `print()` statements.
+- If local search dominates (>70% of time), consider: reduce iterations, switch to faster 1-opt for some runs, or add early termination (e.g., "stop 1-opt after 100 consecutive non-improving moves").
+- If initialization dominates, use a cheaper greedy method and invest savings in more restarts.
+- **Study data:** Problems that solved timeout issues via phase profiling achieved +10–15% improvement vs. those that just tweaked parameters.
 
 **Error-first exploration — MANDATORY PROTOCOL**
 

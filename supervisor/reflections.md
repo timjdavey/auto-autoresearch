@@ -38,3 +38,32 @@ Be specific and justify with evidence.
    - Cannot distinguish "problem needs more trials" from "problem needs bigger timeout"
    - **Proposal:** Fix timeout first (proposal 1), then revisit trial counts. Current 50–72 trial range may be sufficient once timeout is not a bottleneck.
    - **Evidence:** MaxSAT finished well in 61 trials with 0 errors. FacLoc was stable. Only timeout-limited problems needed more trials.
+
+## Study 3 Observations
+
+1. **Conditional guidance branches create confusion and failure:**
+   - MaxSAT regressed catastrophically: 98.61% → 94.38% (-4.23%)
+   - Root cause: Added CRITICAL CHECKPOINT "If you already use 2-opt, skip to initialization diversity." This checkpoint caused Scientists to skip context and examples that MaxSAT needed.
+   - **Proposal:** NEVER use "skip" instructions in guidance. Conditional branches should ADD guidance for specific states, not DELETE sections. Structure as: "If condition X, also try A. If condition Y, focus on B instead." Never remove guidance paths.
+   - **Evidence:** Study 2 (simple, focused guidance) achieved +1.25% aggregate. Study 3 (complex, conditional guidance) achieved -0.63% aggregate. Complexity is the bottleneck.
+
+2. **Vague conceptual guidance fails to direct action:**
+   - Study 3 added "Initialization diversity & timeout management" section for problems with advanced neighborhoods
+   - LOP: -0.05%, QAP: -1.07% (no improvement from redirect)
+   - Reason: Section provided concepts (multi-seed, phase profiling) without concrete next steps
+   - **Proposal:** Guidance must include concrete examples, not abstractions. Instead of "try initialization diversity," specify: "Try 5–10 random seeds with different greedy orderings (facility-first, load-balanced, cost-weighted)" with parameter ranges.
+   - **Evidence:** LOP improved 23.52% in Trial 001 via specific technique (client moves). Multi-seed diversification later achieved 58.85%. Concrete examples work; abstract concepts don't.
+
+3. **Trial count stability is required for inter-study comparison:**
+   - GC ran only 33 trials in Study 3 vs 50–56 in Studies 1–2
+   - Cannot distinguish "GC improved +1.56%" from "lower trial count = more noise"
+   - **Proposal:** Enforce fixed trial budgets per problem. If harness varies budgets per study, document the mechanism and report it in results. Current anomaly in GC trial count suggests either harness variation or hidden per-study logic.
+   - **Evidence:** GC's +1.56% improvement is suspicious given reduced trials and solver errors (trials 11, 23). Need stable budget to interpret improvement signal.
+
+4. **Guidance complexity scaling — evidence for simplification in Study 4:**
+   - Study 1 (baseline, minimal): 39.79% aggregate, all problems executed cleanly
+   - Study 2 (one section added: "Neighborhood structure"): 41.04% aggregate (+1.25%), MaxSAT +6.2% breakthrough
+   - Study 3 (two new sections + conditional checkpoint): 40.41% aggregate (-0.63%), MaxSAT crashed -4.23%
+   - **Pattern:** Increased complexity ≠ increased performance. Each new section added after Study 2 backfired.
+   - **Proposal:** Study 4 should return to Study 2 guidance as baseline, then test ONE small, concrete refinement (e.g., add specific multi-seed examples for weak problems). Measure in isolation before adding more.
+   - **Evidence:** Guidance regression from 41.04% to 40.41%, paired with increased error rates (MaxSAT solver_error, GC coloring bug, LOP range error), indicates guidance-induced instability.

@@ -75,3 +75,37 @@ A chronological log of studies — one entry per study, recording what changed, 
 
 #### Study 2 Conclusion
 **Status:** Mixed results. Aggregate is up due to MaxSAT breakthrough, but LOP regression and GC/FacLoc stagnation reveal guidance is now problem-specific. The "Neighborhood Structure" section helps problems without pre-existing advanced neighborhoods (MaxSAT) but creates negative feedback for problems already exploring neighborhoods (LOP). Need to refine guidance to be truly generic or provide problem-specific branches.
+
+---
+
+### Study 3 (Adaptive Neighborhood Guidance & Timeout Focus)
+- **Date:** 2026-03-26
+- **Hypothesis:** Study 2 showed that generic "try 2-opt" guidance backfires for problems that already use 2-opt. Solution: make neighborhood guidance conditional on solver state. Add a CRITICAL CHECKPOINT: "Check if you already use 2-opt. If yes, skip to initialization diversity and timeout management instead." This preserves MaxSAT's breakthrough path while redirecting LOP/QAP toward initialization diversity (multi-seed, greedy variants) and timeout/phase profiling — strategies that work better for problems with tight time budgets.
+
+- **Changes to guidance.md:**
+  1. **Neighborhood structure section — CONDITIONAL:** Added checkpoint at top: "Are you already using 2-opt? If yes, skip to initialization diversity." Prevents negative feedback loops.
+  2. **New section: "Initialization diversity & timeout management":** For problems with advanced neighborhoods, redirects toward multi-seed restarts, greedy variants, and phase profiling (which showed +10–15% in prior studies). Emphasizes that tweaking neighborhood iteration parameters is waste if the neighborhood itself isn't the bottleneck.
+  3. **Clarified when to suggest what:** "Already using advanced neighborhoods and still stuck? Don't tweak their parameters. Instead, try initialization diversity or timeout/phase restructuring."
+
+#### Results Summary
+- **Aggregate metrics:** 40.41% best avg_improvement (vs 41.04% Study 2, -0.63% regression)
+- **Per-problem breakdown:**
+  - facloc: 64.50% improvement (vs 63.88%, +0.62% marginal improvement)
+  - maxsat: **94.38% improvement (vs 98.61%, -4.23% MAJOR REGRESSION) ✗✗✗**
+  - gc: **20.51% improvement (vs 18.95%, +1.56% improvement) ✓**
+  - lop: 9.23% improvement (vs 9.28%, -0.05% flat)
+  - qap: 13.41% improvement (vs 14.48%, -1.07% regression)
+
+#### Key Observations
+1. **Conditional checkpoint FAILED — MaxSAT crashed:** The new conditional checkpoint in "Neighborhood Structure" section broke MaxSAT's winning path. MaxSAT dropped 4.23% (98.61% → 94.38%), the largest single-study regression so far. Likely cause: the checkpoint caused Scientists to skip over neighborhood exploration that MaxSAT was successfully using.
+
+2. **Initialization diversity redirect didn't help weak problems:** LOP and QAP both regressed or stayed flat. QAP -1.07%, LOP -0.05%. The redirect toward "multi-seed and phase profiling" didn't generate improvements. Possible reason: Scientists may have misunderstood the conditional guidance or attempted redirected strategies without sufficient depth.
+
+3. **GC improved (+1.56%) — signal from somewhere:** GC is the only problem showing strong improvement. However, GC also ran only 33 trials (vs 50–56 in prior studies), suggesting either earlier convergence or harness variation.
+
+4. **Solver errors across all problems:** Multiple crashes in FacLoc (2 errors), GC (2 errors), LOP (1 error), MaxSAT (1 error), QAP (multiple timeouts). This suggests the guidance changes may have caused Scientists to attempt configurations the solvers couldn't handle.
+
+5. **Trial counts unstable:** GC dropped to 33 trials, suggesting early termination or different exploration patterns. Other problems stayed in expected range (47–64 trials).
+
+#### Study 3 Conclusion
+**Status:** FAILED. Aggregate regression -0.63%, MaxSAT catastrophic drop -4.23%. The conditional checkpoint strategy backfired. Making neighborhood guidance conditional didn't preserve MaxSAT's path; instead, it disrupted it. The redirect toward initialization diversity/timeout management didn't help LOP or QAP either. The guidance is now problematic: overly complex with conditional branches that confuse rather than clarify. Revert to simpler, more direct guidance and reconsider the approach.

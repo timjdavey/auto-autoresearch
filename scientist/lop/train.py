@@ -4,10 +4,14 @@ train.py — LOP solver. THIS IS THE FILE THE AGENT MODIFIES.
 Contains a single function `solve(matrix)` that takes a square weight matrix
 and returns a permutation of row/column indices.
 
-Current implementation: identity permutation (baseline).
+Current implementation: Greedy initialization + Simulated Annealing.
 The agent should improve this to maximise avg_improvement across all instances.
 """
 
+
+import time
+import random
+import math
 
 def solve(matrix: list[list[int]]) -> list[int]:
     """
@@ -25,146 +29,129 @@ def solve(matrix: list[list[int]]) -> list[int]:
         perm: list of length n where perm is a permutation of 0..n-1.
               The permutation defines the row/column reordering.
     """
-    import random
-
     n = len(matrix)
     if n == 0:
         return []
     if n == 1:
         return [0]
 
-    def score(perm):
-        """Compute the LOP score for a permutation."""
+    start_time = time.time()
+    time_limit = 55  # Leave 5s buffer before hard 60s limit
+
+    # Helper: calculate score for a permutation
+    def score(p):
         s = 0
         for i in range(n):
-            pi = perm[i]
-            for j in range(i + 1, n):
-                s += matrix[pi][perm[j]]
+            for j in range(i+1, n):
+                s += matrix[p[i]][p[j]]
         return s
 
-    def greedy_construct(shuffle_prob=0.0):
-        """Build permutation greedily by best marginal contribution, with optional randomization."""
-        used = [False] * n
-        perm = []
-        for _ in range(n):
-            best_idx = -1
-            best_gain = -1
-            candidates = []
-            for idx in range(n):
-                if used[idx]:
-                    continue
-                gain = 0
-                for j in range(len(perm)):
-                    gain += matrix[perm[j]][idx]
-                candidates.append((gain, idx))
-                if gain > best_gain:
-                    best_gain = gain
-                    best_idx = idx
-            # With small probability, pick a near-best solution instead of the best
-            if random.random() < shuffle_prob and len(candidates) > 1:
-                candidates.sort(reverse=True)
-                # Pick from top 2-3 candidates
-                idx_to_use = candidates[min(1, len(candidates)-1)][1]
-            else:
-                idx_to_use = best_idx
-            used[idx_to_use] = True
-            perm.append(idx_to_use)
-        return perm
+    def run_sa_polish(init_perm):
+        """Run SA followed by limited 1-opt polish. Return (best_perm, best_score)."""
+        perm = init_perm[:]
+        best_score = score(perm)
+        best_perm = perm[:]
 
-    def local_search_1opt(perm, max_iters=None):
-        """First-improvement 1-opt local search."""
-        if max_iters is None:
-            max_iters = float('inf')
-        iteration = 0
-        improved = True
-        while improved and iteration < max_iters:
-            improved = False
-            current_score = score(perm)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    perm[i], perm[j] = perm[j], perm[i]
-                    new_score = score(perm)
-                    if new_score > current_score:
-                        improved = True
-                        iteration += 1
-                        break
-                    else:
-                        perm[i], perm[j] = perm[j], perm[i]
-                if improved:
+        # Adaptive SA parameters based on instance size
+        if n <= 75:
+            temperature = max(best_score * 0.2, 200)
+            cooling_rate = 0.9995
+            min_temp = 0.0001
+            num_swaps_factor = 5  # Good balance: cooling vs quality
+        else:
+            # For large instances, faster cooling to preserve time for polish
+            temperature = max(best_score * 0.15, 150)
+            cooling_rate = 0.998
+            min_temp = 0.001
+            num_swaps_factor = 6  # Good balance: cooling vs quality
+
+        while temperature > min_temp and time.time() - start_time < time_limit:
+            num_swaps = max(1, n // num_swaps_factor)
+            for _ in range(num_swaps):
+                if time.time() - start_time >= time_limit:
                     break
-            if not improved:
-                break
 
-    def local_search_2opt(perm, max_iters=5):
-        """Limited 2-opt local search: try swapping pairs of non-adjacent elements."""
-        for iteration in range(max_iters):
-            current_score = score(perm)
-            best_i, best_j = -1, -1
-            best_score = current_score
+                i = random.randint(0, n-1)
+                j = random.randint(0, n-1)
+                if i == j:
+                    continue
 
-            for i in range(n):
-                for j in range(i + 2, n):  # Skip adjacent pairs
+                if i > j:
+                    i, j = j, i
+
+                perm[i], perm[j] = perm[j], perm[i]
+                new_score = score(perm)
+                delta = new_score - best_score
+
+                if delta > 0 or random.random() < math.exp(delta / temperature):
+                    best_score = new_score
+                    best_perm = perm[:]
+                else:
                     perm[i], perm[j] = perm[j], perm[i]
-                    new_score = score(perm)
-                    if new_score > best_score:
-                        best_score = new_score
-                        best_i, best_j = i, j
-                    perm[i], perm[j] = perm[j], perm[i]
 
-            if best_i != -1:
-                perm[best_i], perm[best_j] = perm[best_j], perm[best_i]
-            else:
-                break
+            temperature *= cooling_rate
 
-    def local_search_3opt(perm, max_iters=3):
-        """Simple 3-opt: try reversing contiguous subsequences."""
-        for iteration in range(max_iters):
-            current_score = score(perm)
-            best_i, best_j = -1, -1
-            best_score = current_score
-
-            for i in range(n):
-                for j in range(i + 2, n + 1):  # Subsequence [i:j]
-                    perm[i:j] = perm[i:j][::-1]
-                    new_score = score(perm)
-                    if new_score > best_score:
-                        best_score = new_score
-                        best_i, best_j = i, j
-                    perm[i:j] = perm[i:j][::-1]  # Reverse back
-
-            if best_i != -1:
-                perm[best_i:best_j] = perm[best_i:best_j][::-1]
-            else:
-                break
-
-
-    if n <= 75:
-        # Small: greedy + best-improvement 1-opt
-        perm = greedy_construct()
+        # Limited 1-opt polish: max 15 passes to allow more restarts
+        perm = best_perm[:]
+        max_passes = 15
+        pass_count = 0
         improved = True
-        while improved:
-            improved = False
-            current_score = score(perm)
-            best_i, best_j = -1, -1
-            best_score = current_score
 
+        while improved and pass_count < max_passes and time.time() - start_time < time_limit:
+            improved = False
+            pass_count += 1
+
+            # First-improvement: stop after first improvement found
             for i in range(n):
-                for j in range(i + 1, n):
+                if time.time() - start_time >= time_limit:
+                    break
+                for j in range(i+1, n):
                     perm[i], perm[j] = perm[j], perm[i]
                     new_score = score(perm)
+
                     if new_score > best_score:
                         best_score = new_score
-                        best_i, best_j = i, j
                         improved = True
+                        break  # First improvement found, move to next pass
+
                     perm[i], perm[j] = perm[j], perm[i]
 
-            if improved:
-                perm[best_i], perm[best_j] = perm[best_j], perm[best_i]
-    else:
-        # Medium/Large: Greedy + aggressive 1-opt + 2-opt + 3-opt
-        perm = greedy_construct(shuffle_prob=0.05)  # Slight randomization
-        local_search_1opt(perm, max_iters=50)  # 1-opt iterations
-        local_search_2opt(perm, max_iters=20)  # 2-opt iterations
-        local_search_3opt(perm, max_iters=10)  # 3-opt iterations
+                if improved:
+                    break  # Move to next pass after first improvement
 
-    return perm
+        return best_perm, best_score
+
+    def perturb(perm, intensity=0.1):
+        """Perturb permutation by random swaps. Intensity = fraction of swaps."""
+        p = perm[:]
+        num_swaps = max(1, int(n * intensity))
+        for _ in range(num_swaps):
+            i = random.randint(0, n-1)
+            j = random.randint(0, n-1)
+            if i != j:
+                p[i], p[j] = p[j], p[i]
+        return p
+
+    # Greedy initialization
+    row_sums = [sum(row) for row in matrix]
+    init_perm = sorted(range(n), key=lambda i: -row_sums[i])
+
+    # First run
+    best_perm, best_score = run_sa_polish(init_perm)
+    overall_best_perm = best_perm[:]
+    overall_best_score = best_score
+
+    # Multi-restart with perturbation (4 additional restarts if time allows)
+    for restart_idx in range(4):
+        if time.time() - start_time >= time_limit:
+            break
+
+        # Perturb previous best and run SA + polish again
+        perturbed = perturb(overall_best_perm, intensity=0.2)
+        perm, score_val = run_sa_polish(perturbed)
+
+        if score_val > overall_best_score:
+            overall_best_perm = perm
+            overall_best_score = score_val
+
+    return overall_best_perm

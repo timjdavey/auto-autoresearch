@@ -26,7 +26,9 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
     """
     import random
     import math
+    import time
 
+    solve_start = time.time()
     n = len(flow)
     if n == 0:
         return []
@@ -116,13 +118,13 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
             return delta
 
         improved = True
-        # Size-aware iteration limit: increase slightly to use freed time budget
+        # Size-aware iteration limit: reduced to stay within time budget
         if n > 60:
-            max_iterations = 4000  # Was 3000, now 4000 (time freed from reduced perturbation)
+            max_iterations = 3200
         elif n > 50:
-            max_iterations = 5500  # Was 5000, now 5500
+            max_iterations = 4400
         else:
-            max_iterations = 5500  # Was 5000, now 5500
+            max_iterations = 4400
         iteration = 0
 
         while improved and iteration < max_iterations:
@@ -135,6 +137,56 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
                     if delta < 0:
                         assignment[i], assignment[j] = assignment[j], assignment[i]
                         improved = True
+
+        return assignment
+
+    def local_search_oropt(assignment, chain_length=2, max_iterations=100):
+        """Or-opt: move chains of 1-chain_length facilities to different positions."""
+        improved = True
+        iteration = 0
+        current_cost = compute_cost(assignment)
+
+        while improved and iteration < max_iterations:
+            improved = False
+            iteration += 1
+
+            # Try moving chains of specified length
+            for chain_start in range(n):
+                for chain_end in range(chain_start, min(chain_start + chain_length, n)):
+                    chain_indices = list(range(chain_start, chain_end + 1))
+                    if len(chain_indices) == 0:
+                        continue
+
+                    # Try inserting this chain at different positions
+                    for insert_pos in range(n):
+                        if insert_pos >= chain_start and insert_pos <= chain_end:
+                            continue
+
+                        # Create new assignment
+                        new_assignment = assignment[:]
+                        chain_locs = [new_assignment[i] for i in chain_indices]
+
+                        # Remove chain
+                        for i in reversed(chain_indices):
+                            del new_assignment[i]
+
+                        # Insert at new position
+                        adj_pos = insert_pos if insert_pos < chain_start else insert_pos - len(chain_indices)
+                        for j, loc in enumerate(chain_locs):
+                            new_assignment.insert(adj_pos + j, loc)
+
+                        new_cost = compute_cost(new_assignment)
+                        if new_cost < current_cost:
+                            assignment = new_assignment
+                            current_cost = new_cost
+                            improved = True
+                            break
+
+                    if improved:
+                        break
+
+                if improved:
+                    break
 
         return assignment
 
@@ -239,6 +291,7 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
 
         return assignment
 
+
     # Multi-start with size-aware perturbation
     best_assignment = None
     best_cost = float('inf')
@@ -255,13 +308,29 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
         perturbation_rounds = 2
         perturbation_strength = max(3, n // 20)
     else:
-        num_starts = 60  # Keep all starts
-        perturbation_rounds = 1  # Reduced from 2 to 1 for large instances
+        num_starts = 60
+        perturbation_rounds = 1
         perturbation_strength = max(1, n // 30)
 
+    def flow_centrality_order(facility_order_type="random"):
+        """Generate facility ordering based on flow centrality."""
+        if facility_order_type == "high_flow_first":
+            centrality = [sum(abs(flow[i][j]) + abs(flow[j][i]) for j in range(n)) for i in range(n)]
+            order = sorted(range(n), key=lambda i: -centrality[i])
+        elif facility_order_type == "low_flow_first":
+            centrality = [sum(abs(flow[i][j]) + abs(flow[j][i]) for j in range(n)) for i in range(n)]
+            order = sorted(range(n), key=lambda i: centrality[i])
+        else:
+            order = list(range(n))
+            random.shuffle(order)
+        return order
+
+    multistart_start = time.time()
     for start in range(num_starts):
-        facility_order = list(range(n))
-        random.shuffle(facility_order)
+        # Mix of orderings: 40% random, 40% high-flow-first, 20% low-flow-first
+        ordering_type = ["random", "random", "high_flow_first", "high_flow_first", "low_flow_first"][start % 5]
+        facility_order = flow_centrality_order(ordering_type)
+
         # Use probabilistic construction for 80% of starts (more diverse), deterministic for 20% (baseline)
         use_prob = random.random() < 0.8
         assignment = greedy_construct(facility_order, use_probabilistic=use_prob)
@@ -288,4 +357,13 @@ def solve(flow: list[list[int]], distance: list[list[int]]) -> list[int]:
                 best_cost = cost_perturbed
                 best_assignment = perturbed[:]
 
+    multistart_elapsed = time.time() - multistart_start
+
+    # Or-opt post-processing on best solution (if time allows)
+    solve_elapsed = time.time() - solve_start
+    time_remaining = 55 - solve_elapsed  # Leave 5s margin from 60s limit
+    if time_remaining > 3:
+        best_assignment = local_search_oropt(best_assignment, chain_length=2, max_iterations=100)
+
+    print(f"[n={n}] multistart: {multistart_elapsed:.2f}s")
     return best_assignment
