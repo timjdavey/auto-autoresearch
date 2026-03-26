@@ -98,8 +98,9 @@ uv run shutdown
 ## Experimental setup learnings
 
 - The Supervisor (& Scientists) really struggle with self-reflection. They tend to focus too much on the facts about what they did, rather than thinking about how they can change their own processes. This feels similar to how humans are poor at expressing their needs as JTBD. However, humans tend to be good at making concrete feature requests so we've enabled that pattern in `reflections.md`. _Maybe we should introduce a third product interviewer layer?_
+- The Supervisor seems to only attempt to manage or consider what metrics & evaluations it has. Even when prompted to construct it's own, it is highly resistant to do this. So we've overindexed on creating more metrics than we need, then getting it to select & reflect on the tradeoffs for each. This is likely more robust and reflective of complex environments over simple paperclip factories where you're optimising against a single loss function. 
 - Scientists (like all agents) can often go off the rails. We found that ~70% of the token cost was from <5% of the runs. The smoking gun with all those runs was when they used the `TodoWrite` tool when the others didn't. So this is now off limits and we've added a max-budget.
-- Similarly context rot / going off the rails is still a problem for Sonnet (which the Scientist uses), so we've bounded the Supervisor & Scientist to small invocations. This also forces the models to be deliberate about writing their learnings down.
+- Similarly context rot / going off the rails is still a problem for Sonnet (which the Scientist uses), so we've bounded the Supervisor & Scientist to small invocations. This also forces the models to be deliberate about writing their learnings down. Small in this case is a limited set of `--max-turns` and `--max-budget`.
 - Surprisingly Haiku gives enough of a signal about what works. So has become the default Scientist, as we can run more studies in the same time, plus more parallel agents without destroying the token budget.
 - Identical replications don't add enough value for their cost at this stage. We're not looking for statistical significance, we're playing at the boundary of simplicity & optimisation.
 - Supervisor was reluctant to suggest anything radical like introducing a "MEMORY.md" even when heavily prompted. At first it was frustrating as limits the experimental evolution. But in retrospect it's great, as means we can pick up the requests from `reflections.md` and conciously add infrastructure complexity.
@@ -111,29 +112,23 @@ uv run shutdown
 
 ## Evaluation metrics
 
-Each problem's `prepare.py` reports `avg_improvement` — the percentage gain over a weak baseline (greedy or identity permutation). This is the primary signal the Scientist optimises and the Supervisor compares across studies.
+Each problem's `prepare.py` reports `avg_improvement` — the percentage gain over a weak baseline. All metrics are computed by `supervisor/evaluate.py`.
 
-### Known limitations
+**Per-trial** (from `results.tsv`):
+- `avg_improvement` — quality signal over successful instances (crashes excluded)
+- `success_rate` — fraction of instances producing valid results
+- `training_time` — wall-clock seconds
 
-- **Cross-problem scale mismatch.** Baselines vary in weakness (identity permutation for QAP/LOP vs crippled greedy for facloc/gc/maxsat), so raw values are incomparable across problems. A 62% on facloc and 17% on gc don't mean facloc is "more solved." Within a single problem across studies, the baseline is a constant so deltas are meaningful.
-- **No optimality ceiling.** The metric shows distance from baseline, not proximity to optimal. A Scientist stuck at 62% can't tell whether the algorithm is near-optimal or the guidance is bad.
-- **Nonlinear compression near ceiling.** Going from 60%→70% improvement is harder than 10%→20% because the remaining absolute gap shrinks. This compresses progress signals as the Scientist improves.
+**Per-study** (from `analyse()`):
+- *Quality:* best / worst / first / last / median / stdev of `avg_improvement`
+- *Learning speed:* `improvement_velocity` = (best − first) / num_trials, `best_trial`, `num_new_bests`
+- *Plateau detection:* `plateau_trial` (3+ consecutive non-improvements), `longest_plateau`, `tail_velocity` vs `overall_velocity`, `tailing_off` flag
+- *Reliability:* `num_errors`, `error_rate`, `num_regressions` (>10% drop from running best), `avg_success_rate` + first/last trend
+- *Efficiency:* `avg_training_time`
 
-### Metric suite
+**Ensemble-level** (from `_compute_aggregate()`):
+- `mean_headroom_captured` — `mean((new_best - old_best) / (1 - old_best))` per problem, normalises cross-problem progress
+- `problems_improved` — count of problems where guidance helped
+- `worst_problem_delta` — guards against guidance that helps some problems but hurts others
 
-Rather than replacing `avg_improvement`, we augment it with complementary signals:
-
-**Per-trial** (in `results.tsv`):
-- `avg_improvement` — quality signal, computed only over successful instances (failures excluded, not penalised)
-- `success_rate` — fraction of instances producing valid results (reliability signal, separate from quality)
-- `best_known.json` — persisted per-instance best-ever-seen, updated on each run when records are broken
-
-**Per-study** (in `evaluate.py`):
-- `improvement_velocity` — `(best - first) / num_trials`, how fast the Scientist learns
-- `plateau_trial` — first trial where running best doesn't improve for 3+ consecutive trials
-- `success_rate` trend — first vs last success rate shows whether Scientist learns to avoid crashes
-
-**Ensemble-level** (for Supervisor, in `_aggregate` rows):
-- `mean_headroom_captured` — `mean((new_best - old_best) / (1 - old_best))` per problem. Normalises cross-problem progress to a common scale: "what fraction of remaining potential did this guidance capture?"
-- `problems_improved` — count of problems where guidance helped (breadth signal)
-- `worst_problem_delta` — guard against guidance that helps some problems but hurts others
+**Known limitations:** Baselines vary across problems so raw values are incomparable (deltas within a problem are meaningful). The metric shows distance from baseline, not proximity to optimal. Progress signals compress near the ceiling as the remaining absolute gap shrinks.

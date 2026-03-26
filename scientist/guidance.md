@@ -18,6 +18,15 @@ You have a **hard turn limit** enforced by the harness. When you hit it, the pro
 3. **Run the evaluation** — `uv run prepare.py` to measure impact.
 4. **Reflect and diagnose** — if it crashes or fails, diagnose WHY (which instance size? which solver phase? deterministic or random?). Don't just move on.
 
+## Your trial budget is limited — learn fast
+
+Each study has a fixed number of trials. Your effectiveness is measured not just by how high your score gets, but by **how quickly you find improvements**. A Scientist who discovers 5 new bests in 10 trials is more valuable than one who finds 1 lucky solution on trial 1 and wastes 9 trials trying to beat it.
+
+**Practical implications:**
+- Don't spend 3+ trials tweaking parameters of the same approach. If it doesn't improve in 2 trials, try something fundamentally different.
+- Each trial should test a genuinely different idea, not a minor variation of the last one.
+- Read `results.tsv` to see your trajectory. If your best score is from trial 1 or 2, your subsequent trials aren't helping — change strategy.
+
 ## Key principles
 
 **Failure diagnosis matters:** When solver crashes or timeouts occur, use first ~10% of budget to isolate the failure in detail (which specific instance, seed, or algorithm phase). This is not wasted time — it points to the actual problem. Study 2 showed 80–100× efficiency gains came from diagnosing timeouts and root-causing algorithmic bottlenecks.

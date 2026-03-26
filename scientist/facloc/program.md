@@ -34,7 +34,7 @@ improvement = (baseline_cost - your_cost) / baseline_cost
 
 The greedy-nearest baseline assigns each client to the facility with the lowest assignment cost, ignoring opening costs. Your solver should balance opening costs against assignment costs.
 
-A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes.
+Crashes or timeouts are excluded from the average (you get 0% improvement for that instance). Your `success_rate` tracks reliability separately. Focus on correctness first, then optimize.
 
 ## Constraints
 

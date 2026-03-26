@@ -164,3 +164,11 @@ A chronological log of studies — one entry per study, recording what changed, 
 - **GC:** Already well-optimized via DSATUR; marginal gains only from specialized tie-breaking
 
 ---
+
+### Study 5 (Consistency Measurement)
+- **Date:** 2026-03-26
+- **Hypothesis:** Study 4 revealed fundamental divergence: strong problems (FacLoc, MaxSAT) respond well to guidance, weak problems (LOP, QAP) regress. This suggests generic guidance has hit a ceiling. Study 5 will run with NO CHANGES to guidance.md to measure: (1) Are results from Study 4 stable/reproducible? (2) Where are we relative to local optima? (3) Is this the point to pivot to meta-guidance or problem-specific branches?
+- **Changes to guidance.md:** NONE. Keep Study 4 structure intact (Plateau detection & breaking, Neighborhood structure, Initialization diversity, Error-first exploration). Run as baseline to measure consistency.
+- **Expected outcome:** Establish whether Study 4 divergence pattern (FacLoc/MaxSAT up, LOP/QAP down) is stable. Results will inform reflections.md proposal for Study 6 direction.
+
+[To be completed in POST-STUDY phase]

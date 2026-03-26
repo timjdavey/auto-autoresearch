@@ -8,9 +8,14 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+
 import scientist
 import supervisor.evaluate as evaluate
-from supervisor.evaluate import analyse, analyse_and_save, load_results, print_report, STUDY_FIELDS, CRASH_THRESHOLD
+from supervisor.evaluate import (
+    analyse, analyse_and_save, load_results, load_archive,
+    write_summary, print_report, CRASH_THRESHOLD,
+)
 
 
 def _row(avg_improvement, training_time=1.0, success_rate=1.0):
@@ -47,6 +52,14 @@ class TestAnalyse(unittest.TestCase):
         self.assertEqual(stats["best_trial"], 2)
         self.assertEqual(stats["num_errors"], 0)
         self.assertAlmostEqual(stats["error_rate"], 0.0)
+
+    def test_accepts_dataframe(self):
+        """analyse() should work with both list-of-dicts and DataFrame input."""
+        rows = [_row(0.0), _row(0.05), _row(0.10)]
+        df = pd.DataFrame(rows)
+        stats = analyse(df)
+        self.assertEqual(stats["num_trials"], 3)
+        self.assertAlmostEqual(stats["best_avg_improvement"], 0.10)
 
     def test_monotonically_improving(self):
         rows = [_row(i * 0.01) for i in range(10)]
@@ -175,16 +188,18 @@ class TestLoadResults(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            rows = load_results(tmp_path)
-            self.assertEqual(len(rows), 2)
-            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
-            self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
+            df = load_results(tmp_path)
+            self.assertIsInstance(df, pd.DataFrame)
+            self.assertEqual(len(df), 2)
+            self.assertAlmostEqual(df.iloc[0]["avg_improvement"], 0.05)
+            self.assertAlmostEqual(df.iloc[1]["avg_improvement"], 0.10)
         finally:
             os.unlink(tmp_path)
 
-    def test_missing_file_returns_empty(self):
-        rows = load_results("/tmp/nonexistent_eval_file.tsv")
-        self.assertEqual(rows, [])
+    def test_missing_file_returns_empty_dataframe(self):
+        df = load_results("/tmp/nonexistent_eval_file.tsv")
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertTrue(df.empty)
 
     def test_value_types(self):
         tsv_content = (
@@ -196,11 +211,10 @@ class TestLoadResults(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            rows = load_results(tmp_path)
-            row = rows[0]
-            self.assertIsInstance(row["timestamp"], str)
-            self.assertIsInstance(row["avg_improvement"], float)
-            self.assertIsInstance(row["training_time"], float)
+            df = load_results(tmp_path)
+            self.assertEqual(len(df), 1)
+            self.assertAlmostEqual(df.iloc[0]["avg_improvement"], 0.129949)
+            self.assertAlmostEqual(df.iloc[0]["training_time"], 0.928)
         finally:
             os.unlink(tmp_path)
 
@@ -216,10 +230,10 @@ class TestLoadResults(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            rows = load_results(tmp_path)
-            self.assertEqual(len(rows), 2)
-            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
-            self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
+            df = load_results(tmp_path)
+            self.assertEqual(len(df), 2)
+            self.assertAlmostEqual(df.iloc[0]["avg_improvement"], 0.05)
+            self.assertAlmostEqual(df.iloc[1]["avg_improvement"], 0.10)
         finally:
             os.unlink(tmp_path)
 
@@ -235,10 +249,10 @@ class TestLoadResults(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            rows = load_results(tmp_path)
-            self.assertEqual(len(rows), 2)
-            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.05)
-            self.assertAlmostEqual(rows[1]["avg_improvement"], 0.10)
+            df = load_results(tmp_path)
+            self.assertEqual(len(df), 2)
+            self.assertAlmostEqual(df.iloc[0]["avg_improvement"], 0.05)
+            self.assertAlmostEqual(df.iloc[1]["avg_improvement"], 0.10)
         finally:
             os.unlink(tmp_path)
 
@@ -253,16 +267,70 @@ class TestLoadResults(unittest.TestCase):
             f.flush()
             tmp_path = f.name
         try:
-            rows = load_results(tmp_path)
-            self.assertEqual(len(rows), 2)
-            self.assertAlmostEqual(rows[0]["avg_improvement"], 0.25)
-            self.assertAlmostEqual(rows[1]["avg_improvement"], -10.0)
+            df = load_results(tmp_path)
+            self.assertEqual(len(df), 2)
+            self.assertAlmostEqual(df.iloc[0]["avg_improvement"], 0.25)
+            self.assertAlmostEqual(df.iloc[1]["avg_improvement"], -10.0)
         finally:
             os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
-# analyse_and_save
+# load_archive
+# ---------------------------------------------------------------------------
+
+class TestLoadArchive(unittest.TestCase):
+    def _make_archive_study(self, archive_dir, study_name, problem_name, rows):
+        """Create archive/{study}/{problem}/results.tsv."""
+        problem_dir = Path(archive_dir) / study_name / problem_name
+        problem_dir.mkdir(parents=True)
+        results_path = problem_dir / "results.tsv"
+        with open(results_path, "w") as f:
+            f.write("timestamp\tavg_improvement\ttraining_time\n")
+            for r in rows:
+                f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['training_time']}\n")
+
+    def test_loads_multiple_studies(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = Path(tmpdir) / "archive"
+            self._make_archive_study(archive_dir, "20260101-000000", "prob_a",
+                                     [_row(0.0), _row(0.05)])
+            self._make_archive_study(archive_dir, "20260102-000000", "prob_a",
+                                     [_row(0.0), _row(0.10)])
+
+            df = load_archive(archive_dir)
+            self.assertEqual(len(df), 4)  # 2 rows x 2 studies
+            studies = df["study"].unique()
+            self.assertEqual(len(studies), 2)
+            self.assertIn("20260101-000000", studies)
+            self.assertIn("20260102-000000", studies)
+
+    def test_loads_multiple_problems(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = Path(tmpdir) / "archive"
+            self._make_archive_study(archive_dir, "20260101-000000", "prob_a",
+                                     [_row(0.0), _row(0.05)])
+            self._make_archive_study(archive_dir, "20260101-000000", "prob_b",
+                                     [_row(0.0), _row(0.03)])
+
+            df = load_archive(archive_dir)
+            problems = df["problem"].unique()
+            self.assertEqual(set(problems), {"prob_a", "prob_b"})
+
+    def test_empty_archive_returns_empty_dataframe(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = Path(tmpdir) / "archive"
+            archive_dir.mkdir()
+            df = load_archive(archive_dir)
+            self.assertTrue(df.empty)
+
+    def test_nonexistent_archive_returns_empty_dataframe(self):
+        df = load_archive("/tmp/nonexistent_archive_dir")
+        self.assertTrue(df.empty)
+
+
+# ---------------------------------------------------------------------------
+# analyse_and_save + write_summary
 # ---------------------------------------------------------------------------
 
 class TestAnalyseAndSave(unittest.TestCase):
@@ -280,33 +348,40 @@ class TestAnalyseAndSave(unittest.TestCase):
                 f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['training_time']}\n")
         return problem_dir
 
-    def test_saves_per_problem_and_aggregate_rows(self):
+    def test_returns_per_problem_and_aggregate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             scientist_dir = Path(tmpdir) / "scientist"
             scientist_dir.mkdir()
             self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05), _row(0.10)])
             self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.03), _row(0.06)])
 
-            output_path = os.path.join(tmpdir, "study_results.csv")
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            archive_dir = Path(tmpdir) / "archive"  # empty, no archive
             with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
                  patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
-                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+                all_stats = analyse_and_save(output_path=output_path, archive_dir=archive_dir)
 
             self.assertIsNotNone(all_stats)
             self.assertIn("prob_a", all_stats)
             self.assertIn("prob_b", all_stats)
             self.assertIn("_aggregate", all_stats)
 
-            # Verify CSV has 3 rows (prob_a, prob_b, _aggregate)
-            import csv
-            with open(output_path) as f:
-                reader = list(csv.DictReader(f))
-            self.assertEqual(len(reader), 3)
-            problems_in_csv = [r["problem"] for r in reader]
-            self.assertIn("prob_a", problems_in_csv)
-            self.assertIn("prob_b", problems_in_csv)
-            self.assertIn("_aggregate", problems_in_csv)
-            self.assertEqual(set(reader[0].keys()), set(STUDY_FIELDS))
+    def test_writes_summary_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scientist_dir = Path(tmpdir) / "scientist"
+            scientist_dir.mkdir()
+            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05), _row(0.10)])
+
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            archive_dir = Path(tmpdir) / "archive"
+            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
+                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
+                analyse_and_save(output_path=output_path, archive_dir=archive_dir)
+
+            self.assertTrue(os.path.exists(output_path))
+            content = Path(output_path).read_text()
+            self.assertIn("Study Summary", content)
+            self.assertIn("prob_a", content)
 
     def test_returns_none_with_too_few_rows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -314,33 +389,13 @@ class TestAnalyseAndSave(unittest.TestCase):
             scientist_dir.mkdir()
             self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0)])
 
-            output_path = os.path.join(tmpdir, "study_results.csv")
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            archive_dir = Path(tmpdir) / "archive"
             with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
                  patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
-                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+                all_stats = analyse_and_save(output_path=output_path, archive_dir=archive_dir)
 
             self.assertIsNone(all_stats)
-            self.assertFalse(os.path.exists(output_path))
-
-    def test_appends_multiple_studies(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scientist_dir = Path(tmpdir) / "scientist"
-            scientist_dir.mkdir()
-            self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.05)])
-
-            output_path = os.path.join(tmpdir, "study_results.csv")
-            with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
-                 patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
-                analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
-                analyse_and_save(timestamp="2026-01-02T00:00:00", output_path=output_path)
-
-            import csv
-            with open(output_path) as f:
-                reader = list(csv.DictReader(f))
-            # 2 studies x 2 rows each (prob_a + _aggregate)
-            self.assertEqual(len(reader), 4)
-            timestamps = set(r["timestamp"] for r in reader)
-            self.assertEqual(timestamps, {"2026-01-01T00:00:00", "2026-01-02T00:00:00"})
 
     def test_aggregate_is_mean_of_problems(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -349,14 +404,83 @@ class TestAnalyseAndSave(unittest.TestCase):
             self._make_problem_dir(scientist_dir, "prob_a", [_row(0.0), _row(0.10)])
             self._make_problem_dir(scientist_dir, "prob_b", [_row(0.0), _row(0.06)])
 
-            output_path = os.path.join(tmpdir, "study_results.csv")
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            archive_dir = Path(tmpdir) / "archive"
             with patch.object(scientist, "SCIENTIST_DIR", scientist_dir), \
                  patch.object(evaluate, "SCIENTIST_DIR", scientist_dir):
-                all_stats = analyse_and_save(timestamp="2026-01-01T00:00:00", output_path=output_path)
+                all_stats = analyse_and_save(output_path=output_path, archive_dir=archive_dir)
 
             agg = all_stats["_aggregate"]
             # Mean of total_improvement: (0.10 + 0.06) / 2 = 0.08
             self.assertAlmostEqual(agg["total_improvement"], 0.08)
+
+
+# ---------------------------------------------------------------------------
+# write_summary
+# ---------------------------------------------------------------------------
+
+class TestWriteSummary(unittest.TestCase):
+    def _make_archive_study(self, archive_dir, study_name, problem_name, rows):
+        """Create archive/{study}/{problem}/results.tsv."""
+        problem_dir = Path(archive_dir) / study_name / problem_name
+        problem_dir.mkdir(parents=True)
+        (problem_dir / "program.md").write_text("# test\n")
+        results_path = problem_dir / "results.tsv"
+        with open(results_path, "w") as f:
+            f.write("timestamp\tavg_improvement\ttraining_time\n")
+            for r in rows:
+                f.write(f"{r['timestamp']}\t{r['avg_improvement']}\t{r['training_time']}\n")
+
+    def test_summary_includes_archive_studies(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = Path(tmpdir) / "archive"
+            self._make_archive_study(archive_dir, "20260101-000000", "prob_a",
+                                     [_row(0.0), _row(0.05), _row(0.10)])
+            self._make_archive_study(archive_dir, "20260102-000000", "prob_a",
+                                     [_row(0.0), _row(0.08), _row(0.15)])
+
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            # Patch SCIENTIST_DIR to an empty dir so load_current returns nothing
+            empty_sci = Path(tmpdir) / "scientist"
+            empty_sci.mkdir()
+            with patch.object(evaluate, "SCIENTIST_DIR", empty_sci):
+                all_studies = write_summary(output_path=output_path, archive_dir=archive_dir)
+
+            self.assertIn("20260101-000000", all_studies)
+            self.assertIn("20260102-000000", all_studies)
+            content = Path(output_path).read_text()
+            self.assertIn("20260101-000000", content)
+            self.assertIn("20260102-000000", content)
+            self.assertIn("best_avg_improvement", content)
+
+    def test_summary_overwrites_on_each_call(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = Path(tmpdir) / "archive"
+            self._make_archive_study(archive_dir, "20260101-000000", "prob_a",
+                                     [_row(0.0), _row(0.05)])
+
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            empty_sci = Path(tmpdir) / "scientist"
+            empty_sci.mkdir()
+            with patch.object(evaluate, "SCIENTIST_DIR", empty_sci):
+                write_summary(output_path=output_path, archive_dir=archive_dir)
+                content1 = Path(output_path).read_text()
+                write_summary(output_path=output_path, archive_dir=archive_dir)
+                content2 = Path(output_path).read_text()
+
+            # Should be identical (overwritten, not appended)
+            self.assertEqual(content1, content2)
+
+    def test_empty_archive_writes_no_data_message(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "study_summary.md")
+            empty_sci = Path(tmpdir) / "scientist"
+            empty_sci.mkdir()
+            with patch.object(evaluate, "SCIENTIST_DIR", empty_sci):
+                write_summary(output_path=output_path, archive_dir=Path(tmpdir) / "no_archive")
+
+            content = Path(output_path).read_text()
+            self.assertIn("No study data found", content)
 
 
 # ---------------------------------------------------------------------------

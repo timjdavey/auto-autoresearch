@@ -3,7 +3,7 @@ name = "auto-autoresearch"
 version = "0.1.0"
 description = "Autoresearching how to do autoresearch"
 requires-python = ">=3.13"
-dependencies = ["numpy", "scipy"]
+dependencies = ["numpy", "scipy", "pandas"]
 
 [tool.uv]
 package = true
@@ -11,6 +11,11 @@ package = true
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["supervisor", "scientist", "human"]

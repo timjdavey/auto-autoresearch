@@ -59,6 +59,25 @@ RED FLAG that you need to given seperate advice for each problem.
 
 ---
 
+## Study 5 Plan — Measure Consistency & Prepare Reflection
+
+**Hypothesis:** Study 4 revealed a fundamental tension:
+- Strong problems (FacLoc, MaxSAT) respond well to neighborhood guidance, showing continued improvement (FacLoc +2.67%, MaxSAT +4.93% recovery)
+- Weak problems (LOP, QAP) regress from the same guidance (LOP -4.18%, QAP -0.97%), likely because generic strategies (multi-seed, initialization diversity) are already exhausted in their prior trial history
+- Generic guidance **diverges by problem type**. After 4 studies, this is provably fundamental.
+
+**Study 5 decision:** Run with NO CHANGES to guidance.md (keep Study 4 structure intact). Instead, measure:
+1. **Consistency:** Are Study 4 results stable/reproducible, or is there high noise?
+2. **Ceiling detection:** Where are we relative to local optima? (FacLoc improving, MaxSAT very high, LOP/QAP seem broken)
+3. **Foundation for Study 6 decision:** Do results confirm that generic guidance has hit a divergence wall, requiring either:
+   - Problem-specific branches (proposal to human in reflections.md)
+   - Meta-guidance pivote: teach Scientists how to diagnose "is this a problem I can solve with current approach?" (alternative proposal)
+   - Acceptance of weak-problem failure (minimize divergence by giving up on LOP/QAP)
+
+**Action:** No guidance.md edits. Update journal.md during POST-STUDY with consistency analysis.
+
+---
+
 ## Untested ideas
 
 - Memory: each new trial gets a new Scientist, so what files should the Scientist have to maintain pass it's thinking on most efficiently and effectively? e.g. a scratchpad. As searching through old train.py is expensive & slow & doesn't show any insights.
@@ -86,6 +105,8 @@ RED FLAG that you need to given seperate advice for each problem.
 - Per-trial efficiency metric: track `(best_avg_improvement - first_avg_improvement) / num_trials` as an explicit diagnostic
 - Incremental changes principle: small focused edits easier to debug than large rewrites
 - Print-statement time instrumentation: add per-phase timing (init, local search, restarts) to measure where budget is consumed
+- **Meta-guidance approach (Study 6 candidate):** Instead of "try neighborhoods", teach Scientists diagnostic skills: "How do you know if the bottleneck is algorithmic (needs different approach) vs parametric (needs tuning)? Profile time, measure marginal gains, make conscious trade-offs." This works across all problems without diverging.
+- **Problem-specific guidance branches (alternative for Study 6):** Create separate guidance sections per problem type (strong vs weak), with conditional entry: "For problems where neighborhood/phase methods work (FacLoc, MaxSAT), use X. For problems requiring algorithmic redesign (LOP, QAP), use Y." Explicit acknowledgment of divergence.
 
 ## Proven strategies
 

@@ -74,7 +74,7 @@ def soft_reset(problems=None, verbose=True):
 
 
 def hard_reset():
-    """Full reset: soft reset all problems + delete top-level archive, logs, study_results."""
+    """Full reset: soft reset all problems + delete top-level archive, logs, study_summary."""
     soft_reset()
 
     # Top-level experiment archive
@@ -89,16 +89,16 @@ def hard_reset():
         shutil.rmtree(logs)
         print(f"  Deleted {logs}/", file=sys.stderr)
 
-    # Supervisor study results
-    study_results = Path("supervisor") / "study_results.csv"
-    if study_results.exists():
-        study_results.unlink()
-        print(f"  Deleted {study_results}", file=sys.stderr)
+    # Supervisor study summary (cache, regenerated from archive)
+    study_summary = Path("supervisor") / "study_summary.md"
+    if study_summary.exists():
+        study_summary.unlink()
+        print(f"  Deleted {study_summary}", file=sys.stderr)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Reset experiment / study state.")
-    parser.add_argument("--soft", action="store_true", help="Soft reset (per-problem only, keeps top-level archive/logs/study_results)")
+    parser.add_argument("--soft", action="store_true", help="Soft reset (per-problem only, keeps top-level archive/logs/study_summary)")
     parser.add_argument("--problems", type=str, default=None, help="Comma-separated list of problems to reset (implies --soft)")
     args = parser.parse_args()
 

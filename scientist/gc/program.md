@@ -31,7 +31,7 @@ You are optimising **`avg_improvement`** (higher is better) — how much better 
 improvement = (baseline_colours - your_colours) / baseline_colours
 ```
 
-A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes.
+Crashes or timeouts are excluded from the average (you get 0% improvement for that instance). Your `success_rate` tracks reliability separately. Focus on correctness first, then optimize.
 
 ## Constraints
 

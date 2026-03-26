@@ -34,7 +34,7 @@ improvement = (your_score - baseline_score) / baseline_score
 
 The score is the sum of matrix elements strictly above the main diagonal after reordering rows and columns by your permutation. Higher score = better ordering.
 
-A crash or timeout on any instance incurs an improvement of -10.0. Avoid crashes.
+Crashes or timeouts are excluded from the average (you get 0% improvement for that instance). Your `success_rate` tracks reliability separately. Focus on correctness first, then optimize.
 
 ## Constraints
 

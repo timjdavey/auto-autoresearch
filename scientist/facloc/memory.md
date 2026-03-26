@@ -1,125 +1,203 @@
-# Facility Location Scientist Memory
+## Trial 55: ILS perturbation depth tuning — RECOVERED 64.40% (BEST STABLE)
 
-## Results Summary
-- **Baseline (greedy nearest):** 0.00%
-- **Trial 1 (greedy+1-opt local search):** 19.80% (11.05% / 24.33% / 24.01%)
-- **Trial 3 (facility-first initialization):** 27.55% (11.05% / 47.59% / 24.01%) ✓ BREAKTHROUGH
+**Status: Matched recent best at 64.40%**
 
-## Trial 1-2 Analysis
-- Simple 1-opt local search with best-improvement achieved 19.80%
-- Multi-start with 5 random seeds on client-first greedy: stuck at 19.80%
-- Conclusion: Client-first greedy + 1-opt is a strong local optimum
+### Trial 55: Increased ILS perturbations
+- Changed: num_perturbations 4→6 for small instances, 2→3 for large
+- Rationale: Baseline (trial 54) was at 64.37%, below recent best of 64.40%; time budget available (12.8s of 60s)
+- Result: **64.40% (+0.03%)** ✓ - Matched best trials 49-51
+- Time: 12.8s → 15.3s (still well within budget)
+- Per-instance breakdown:
+  - rand30: 59.41% (slight improvement +0.10%)
+  - rand40: 66.41% (stable)
+  - rand50: 67.39% (stable)
 
-## Trial 3: Facility-First Initialization BREAKTHROUGH
-- Added facility-first construction strategy (open facilities in order of cost, assign clients)
-- Tried both client-first and facility-first with 3 seeds each (6 total attempts)
-- Key insight: facility-first escapes the local basin of client-first greedy
-- Result: +7.75% improvement (19.80% → 27.55%)
-- Breaking point: rand40_120a jumped from 24.33% to 47.59% (almost 2x)
+### Key insight:
+- ILS perturbation count is a tuning lever for quality vs speed
+- Current setting (6/3 perturbations) achieves good balance: 64.40% in only 15.3s
+- Still 44.7s unused budget (25% total) — more depth possible but diminishing returns observed in memory
 
-## Trial 4: Load-Balanced Facility Ordering BREAKTHROUGH ✓
-- Added load-balanced facility ordering: sort by opening_cost / avg_assignment_cost
-- Three strategies: client-first + facility-cost + facility-load-balanced (3 seeds each = 9 total)
-- Removed expensive 2-opt, kept only 1-opt
-- Key insight: Cost-to-benefit ratio captures facility value better than cost alone
-- Result: MASSIVE +36.28% improvement (27.55% → 63.83%)
-- Per-instance gains:
-  - rand30_100a: 58.38% (was 11.05%) [+5.25x!]
-  - rand40_120a: 65.94% (was 47.59%) [+1.39x]
-  - rand50_150a: 67.17% (was 24.01%) [+2.80x]
+### Plateau status:
+- **CONFIRMED STABLE at 64.40%** across multiple trials
+- Greedy+LS family architectural ceiling is real (~64.40%)
+- All major redesign attempts in earlier trials (39-42) failed
+- Time NOT limiting: 15.3s vs 60s available
 
-## Convergence Analysis
-- Tested seed count: 3 seeds/strategy achieves 63.83%, 4 seeds also 63.83% (converged)
-- Solver is stable and finds same local optimum across variations
-- Total time: 2.67s (well under 60s per-instance limit)
+### Next trial options:
+1. **Accept 64.40%** as final if budget exhausted
+2. **Genetic Algorithm or Ant Colony** if exploring different algorithm families (high risk, memory shows prior attempts failed)
+3. **Cluster-based initialization enhancement** (memory trial 44 had limited success)
 
-## Algorithm Structure (FINAL)
-**Three parallel construction strategies:**
-1. **Client-first:** Greedy nearest (baseline-like but with random tie-breaking)
-2. **Facility-first:** Sort facilities by opening cost, incrementally add facilities
-3. **Facility load-balanced:** Sort by cost/avg_assignment_cost ratio (KEY INSIGHT)
+## Trial 44: Cluster-based init + adaptive SA — PLATEAU HOLDS AT 64.37% (FINAL)
 
-Each strategy runs 3 times with different random seeds (9 total attempts).
-All solutions refined with 1-opt local search (best-improvement).
-Best solution kept.
+**Status: CONFIRMED PLATEAU — all greedy+LS variants exhausted**
 
-**Why load-balanced works:** Captures facility value as ratio of opening cost to typical assignment benefit. Pure cost sorting ignores how useful each facility is to clients.
+Final score: **64.37% avg_improvement** (rand30: 59.31%, rand40: 66.41%, rand50: 67.39%)
 
-## Next Trial Recommendations
-1. **Try facility removal phase:** After construction, greedily close facilities that don't improve cost. (Current code has basic version; make more aggressive)
-2. **Explore weight variations:** Weight opening_cost differently in load-balanced ratio (e.g., 0.5x, 0.8x, 1.2x) to see if slightly different orderings help
-3. **Try neighborhood swap:** Instead of just client moves, try facility swaps (reassign cluster of clients to different facility)
-4. **Profile time per instance:** Small instances solve very fast (<1s), room for stronger local search (e.g., 2-opt on small instances only)
+### Trial 44a: Cluster-based initialization
+- New init: group clients by primary facility affinity, assign clusters intelligently
+- Clusters should find different solution landscape than greedy
+- Result: **NO CHANGE (64.37%)** ✗
+- Root cause: clustering is still client-ordering heuristic within greedy+LS family
 
-## Trial 12: Plateau-Breaking Diversification
-- Added facility closing phase + seed/weight variations: +0.15% (63.83% → 63.98%)
+### Trial 44b: Adaptive SA (temperature varies by facility ratio)
+- Facility-heavy (ratio > 0.5): temp=200, 800 iters, cooling=0.95
+- Normal: temp=100, 500 iters, cooling=0.98
+- Applied as final refinement (replacing weak final SA)
+- Result: **NO CHANGE (64.37%)** ✗
+- Root cause: SA at the END of optimization runs too late; solution already trapped by LS
 
-## Trial 13+: Plateau Analysis (64.10% achieved, stuck)
-- **Current best: 64.10%** (trials 37-40, stable)
-  - rand30_100a: 58.50% (bottleneck)
-  - rand40_120a: 66.41% (strong)
-  - rand50_150a: 67.39% (strong)
+### Trial 44c: Early aggressive SA (before LS phases)
+- Apply adaptive_sa_escape after greedy init, before facility_closing + 2-opt + pair_swap
+- Theory: SA explores while solution is fluid, LS refines after
+- Result: **REGRESSION to 64.36%** ✗ (-0.01%)
+- Root cause: Running 5+ SA phases per seed × 14 seeds = 70+ SA runs total (excessive, wastes time)
+- Early SA variants: not the answer
 
-- **Failed plateau-breaking approaches:**
-  1. 2-opt refinement: Caused timeouts on large instances (rand40, rand50 exceeded 60s budget)
-  2. Perturbation ILS (5 rounds, strength=2): No improvement, time ~9s
-  3. Simulated annealing post-processing (200 iters): No improvement
-  4. Outer-level multi-start (3 full solves): 3× time increase to 21s, no score gain
+### Key insights from trial 44:
+1. **Cluster-based init doesn't escape plateau** — still greedy+LS family
+2. **Adaptive SA at end is weak** — solution locked by LS before SA runs
+3. **Early aggressive SA is excessive** — too many SA runs trap quality
+4. **Plateau is REAL**: 64.37% confirmed stable across all variants (39-44)
 
-- **Root cause analysis:**
-    - Current approach: 7 strategies × 8 seeds = 56 construction attempts
-    - All converge to same 64.10% solution (tight local optimum)
-    - Time remaining: 60-9 = 51s available per instance
-    - Local search (1-opt) appears fully saturated; further 1-opt iterations don't improve
-    - rand30 is algorithmically harder (different structure vs rand40/rand50?)
+### Critical realization:
+- All attempts at greedy+LS variants fail (cluster init, more SA, adaptive temps)
+- All SA placement attempts fail (end, early, multiple)
+- Plateau appears to be true architectural limit of this family
+- **Next trial MUST use fundamentally different algorithm or accept 64.37% as final**
 
-## Next Trial Strategy
-- **Current code is stable:** 56 attempts cover solution space well, facility closing helps
-- **To break plateau:** Need fundamentally different algorithm
-- Options (priority order):
-  1. **3-opt for rand30 only** (small instance, time available): More thorough local search
-  2. **Perturbation-based ILS with acceptance criteria** (tabu, variable depth)
-  3. **Swap to Tabu Search** entirely (replace greedy+1-opt with tabu)
-  4. **Problem structure analysis** (why rand30 weak? specialized init for small instances?)
+### NEXT TRIAL OPTIONS (in order of likelihood to break plateau):
+1. **Genetic Algorithm** — population crossover might find rand30 good solutions greedy can't
+2. **Perturbation-based stochastic search** (not ILS) — maybe larger, more varied perturbations
+3. **Tabu Search with longer tenure + aspiration** (trial 24 was weak because tenure was too short)
+4. **Accept 64.37%** if no GA/Tabu variants work (strong local optimum)
 
-## Key Metrics (Current)
-- **avg_improvement: 64.10%** (stable plateau 50+ trials)
-- Success rate: 100%
-- Time per instance: 3-4s of 60s (7-8% utilization)
-- Trial count: 50+ with no improvement
+## Trial 39-42: Plateau-breaking attempts — CONFIRMED 64.37% IS ARCHITECTURAL CEILING
 
-## Trial 48 (2-opt + 3-opt + perturbation attempts — FAILED)
-- Tried: 2-opt on all 35 attempts (7 strategies × 5 seeds) → **TIMEOUT** (all instances exceeded 65s budget)
-- Tried: 2-opt only on best solution → **NO IMPROVEMENT** (64.10%)
-- Tried: Aggressive 3-opt (max_iters=100, 20-client scan) for n_clients<=30 → **NO IMPROVEMENT** (64.10%)
-- Tried: Perturbation (strength=2) + 1-opt loop (3 rounds) for small instances → **NO IMPROVEMENT** (64.10%)
+**Current Score: 64.37% avg_improvement** (STABLE)
 
-**Root cause:** All 56 construction attempts + facility closing + 1-opt converge to same local optimum (tight basin). No local search neighborhood (2-opt, 3-opt) or perturbation escapes it from within same basin.
+### Trial 39: Simulated Annealing as PRIMARY solver
+- Removed multi-start greedy backbone
+- SA with 10 restarts (5 for large), basin-hopping focus
+- Result: **SEVERE REGRESSION to 56.28%** ✗ (-8.09%)
+- Root cause: SA alone without greedy initialization + strong local search backbone performs 40% worse
+- Conclusion: SA as primary is not viable; greedy+ILS framework is essential
 
-## Plateau Escape Conclusion
-- Local search variants exhausted: 1-opt, 2-opt, 3-opt, multi-start, perturbation all fail
-- Construction diversity exhausted: 7 strategies × 8 seeds all find identical solution
-- Facility closing already aggressive (removes unprofitable facilities)
-- **Truly stuck at local optimum.** Need fundamentally different algorithm:
-  - **ILS with deeper perturbation** (move 5+ clients, allow temporary cost increase)
-  - **Tabu Search** (forbidden moves to force exploration)
-  - **Variable Neighborhood Search** (switch between multiple neighborhood structures)
-  - **Genetic Algorithm** (population-based crossing)
-  - **Simulated Annealing with proper cooling** (currently tried but parameters may be weak)
+### Trial 40: Aggressive ILS perturbations (15% vs 5%)
+- Increased perturbation size: n_clients//7 instead of n_clients//20
+- Increased restart attempts: 8 for small, 5 for large
+- Result: **REGRESSION to 63.92%** ✗ (-0.45%)
+- Root cause: Larger perturbations disrupt good solutions faster than re-optimization can recover
+- Conclusion: Current 5% perturbation size is near-optimal balance
 
-## Trial 52+: ILS and Savings Heuristic Attempts (FAILED)
-- **Aggressive perturbation ILS:** Move 15-25% of clients + 1-opt (8 iterations) → **NO IMPROVEMENT** (64.10%), time increased 9.4s → 22.2s
-- **Multi-start ILS:** 6 ILS processes (3 seeds × 2 variations) on best solution → **TIMEOUT + REGRESSION** (62.52%, success_rate 67%)
-- **Single-run ILS (3 iterations):** Reduced iterations to avoid timeout → **NO IMPROVEMENT** (64.10%), time 15.4s
-- **Savings-based construction:** Clarke-Wright style savings heuristic added as 8th strategy → **NO IMPROVEMENT** (64.10%)
+### Trial 41: Expanded weight variations (0.1-0.9)
+- Increased weight values from 4 to 9 (dense exploration of opening_cost emphasis)
+- Expected: Better facility-heavy (rand30) performance
+- Result: **NO CHANGE (64.37%)** ✗
+- Time increased: 9.4s → 17.0s (73% more) with zero quality gain
+- Root cause: Weight space [0.2, 0.8] was already near-optimal; diminishing returns
+- Conclusion: Parameter tuning is exhausted
 
-**Analysis:** All 8 construction strategies (including new savings heuristic) converge to identical 64.10% solution after facility closing + 1-opt. Perturbation + re-optimization doesn't escape. The local optimum is SO tight that even aggressive perturbation (moving 25% of clients) + full 1-opt re-run doesn't find better solutions.
+### Trial 42: More random seeds (10→14 for small, 5→7 for large)
+- Increase multi-start configurations: 35 → 52 for small instances
+- Expected: More exploration = better solution in seed space
+- Result: **NO CHANGE (64.37%)** ✗
+- Time increased slightly: 9.4s → 13.0s
+- Root cause: Already sampling seed space; more seeds hit same local optima
+- Conclusion: Multi-start has saturation point; additional seeds don't escape basin
 
-**Plateau status:** 60+ trials at 64.10% with zero improvement. All feasible local search variants and construction heuristics exhausted.
+### Plateau Analysis (40+ trials at 64.17%-64.37%):
+- **Proven approaches tried this trial:** SA as primary (failed), larger perturbations (failed), more weights (failed), more seeds (failed)
+- **Time budget:** 13s / 60s (78% unused) — solver is NOT time-limited
+- **Instance breakdown:**
+  - rand30: 59.31% (STUCK: weak on facility-heavy)
+  - rand40: 66.41% (STRONG)
+  - rand50: 67.39% (STRONG)
+  - **Gap: 8.08%** indicates algorithm weakness on high facility-to-client ratios
+- **Exhausted approaches (all trials 24-42):**
+  1. Parameter tuning: iterations, temperatures, cooling rates, weights, seeds
+  2. Neighborhood variants: 1-opt, 2-opt, 3-opt, facility pair swaps, facility closing
+  3. Diversification: ILS perturbations (small, large, adaptive), multi-start counts, seed ranges
+  4. Initialization: greedy, facility-first, load-balanced, cost-weighted, random
+  5. Meta-heuristics: Tabu Search (regressed), VND (regressed), SA as primary (regressed)
 
-**What's left to try (major rewrites only):**
-- Tabu Search with tabu tenure/aspiration
-- Genetic Algorithm with population-based search
-- Variable Neighborhood Search with multiple neighborhood sizes
-- Ant Colony Optimization
-- Accept this plateau as near-optimal for this problem
+### CRITICAL ROOT CAUSE (CONFIRMED by multiple negative results):
+- **Greedy+local-search family hits architectural ceiling at 64.37%**
+- Weak rand30 (59.31%) is NOT a parameter-tuning issue — it's algorithmic
+- All attempts to escape (more seeds, more weights, larger perturbations, new neighborhoods) FAILED
+- 78% unused time budget proves: algorithm choice, not execution time, is limiting
+- **Previous best SA-post-processing + ILS was optimal within this family**
+
+### MANDATORY NEXT STEP:
+**Do NOT attempt:** any more parameter tuning, seed adjustments, or neighborhood variants. All are futile.
+**Must redesign** using fundamentally different algorithm family:
+1. **Genetic Algorithm** (population-based crossover/mutation, ignores local optima paths)
+2. **Ant Colony Optimization** (pheromone trails for facility-assignment patterns)
+3. **Simulated Annealing as PRIMARY** with problem-specific neighbor moves (not random 1-opt)
+4. **Tabu Search with stronger aspiration + longer tenure** (previous attempt was weak)
+5. **Cluster-based construction** (group clients by facility proximity, assign clusters)
+
+**Key insight for next trial:** The algorithm family boundary is clear. Trial 39 showed SA alone fails; Trial 40-42 showed greedy+LS has no improvement room. The solution is a DIFFERENT algorithm, not parameters.
+
+## Trial 24-26: Algorithmic redesign attempts — ALL BLOCKED AT 64.17%
+
+**Current Score: 64.17% avg_improvement** (rand30: 59.31%, rand40: 65.88%, rand50: 67.31%)
+
+### Trial 24: Tabu Search
+- Implemented tabu list (tenure=n_clients//10) to avoid cycling
+- Replaced ILS with tabu_search as primary solver
+- Result: **REGRESSED to 63.86%** ✗ (rand30: 58.62%, rand40: 65.57%, rand50: 67.39%)
+- Time increased: 39.86s vs 14.9s, even with fewer configurations
+- Root cause: tabu list too restrictive, aspiration criterion weak
+
+### Trial 25: Variable Neighborhood Descent (VND)
+- Systematic cycling through neighborhoods: 1-opt → facility_closing → 2-opt → pair_swap
+- Perturb on plateau, restart cycling
+- Result: **REGRESSED to 63.86%** (same as Tabu) ✗
+- Time: 19.66s (better than Tabu, but worse than baseline)
+- Root cause: cycling loses the benefits of per-neighborhood iteration tuning
+
+### Trial 26: Enhanced small-instance search
+- For n_clients < 60: 10 seeds (vs 5), 4 initializers (+ random_facility_init)
+- More random restart diversity for high facility-to-client ratio
+- Result: **NO CHANGE (64.17%)** ✗
+- Root cause: already at local optimum; more restarts within greedy+LS family can't escape
+
+### Plateau Analysis (15+ trials at 64.17%):
+- **Current solver:** 5 seeds × (3 init + 4 weights) = 35 configurations
+- **Per-run phases:** init → 1-opt(50) → facility_closing(20) → 2-opt(15) → pair_swap(10) → ILS(7) → SA(50)
+- **Time:** 15-16s / 60s (73-75% unused budget)
+- **Instance performance:** rand30 weak (59.31%), rand40/50 good (65-67%)
+- **Instance gap:** 59.31% - 65.88% = 6.57% spread, suggests algorithm struggles with high facility-to-client ratios
+
+### Exhausted approaches (all blocked at 64.17%):
+1. Parameter tuning: more iterations, deeper SA, temperature tweaks
+2. Neighborhood variants: 2-opt, 3-opt, facility pair swaps, perturbation ILS
+3. Diversification: weight variations, seed increases, phase reordering, random init
+4. Instance-aware: adaptive iteration counts, 3-opt for small instances
+5. Algorithmic redesign: Tabu Search (regressed), VND (regressed)
+
+### Root cause (CONFIRMED):
+- Greedy+local-search family hits architectural ceiling at 64.17%
+- Weak rand30 (59.31%) indicates inability to handle facility-heavy instances
+- Tabu/VND regressions show new algorithms within similar family don't escape the basin
+- 73% unused time budget proves algorithm choice, not time, is limiting factor
+
+### CRITICAL: What works at 64.17%
+To avoid regression if reverting, the baseline is:
+- Initializations: greedy_nearest, facility_first_init, load_balanced_init, cost_weighted_init (weights 0.2-0.8)
+- 5 seeds: [1, 42, 123, 456, 789]
+- Local search: 1-opt(50-80) → facility_closing → 2-opt → pair_swap → ILS → SA(50)
+- Full search requires only 16s / 60s, so time NOT a bottleneck
+
+### Next trial strategy (CRITICAL):
+Attempting yet another variant of greedy+LS will fail. Need FUNDAMENTALLY DIFFERENT algorithm:
+1. **Genetic Algorithm** with population-based crossover/mutation (ignores local optima paths)
+2. **Ant Colony Optimization** (pheromone trails may find rand30-specific good paths)
+3. **Simulated Annealing as PRIMARY** (not post-processing), with adaptive temperature/cooling for different instance sizes
+4. **Iterated Local Search with large perturbations** (larger k, more aggressive restart)
+5. **Problem-specific cluster-based construction** (group clients, assign clusters, then optimize)
+
+**Do NOT attempt:** any variant of greedy construction, parameter tweaks on existing neighborhoods, or additional random restarts.
+Ceiling is algorithm family, not parameters or diversity count.
+
